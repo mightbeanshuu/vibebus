@@ -1,0 +1,14 @@
+<svg width="980" height="300" viewBox="0 0 980 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">VibeBus terminal preview</title>
+  <desc id="desc">A terminal showing VibeBus commands for registering agents and creating tasks.</desc>
+  <rect width="980" height="300" rx="26" fill="#09111F"/>
+  <rect x="1.5" y="1.5" width="977" height="297" rx="24.5" stroke="#334155" stroke-width="3"/>
+  <circle cx="42" cy="38" r="10" fill="#FF6B6B"/>
+  <circle cx="74" cy="38" r="10" fill="#FFD166"/>
+  <circle cx="106" cy="38" r="10" fill="#83F7C6"/>
+  <text x="38" y="90" fill="#83F7C6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22">$ vibebus register codex-main codex implementer openai gpt-5.5</text>
+  <text x="38" y="129" fill="#CBD5E1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20">{ "ok": true, "agent": "codex-main", "status": "registered" }</text>
+  <text x="38" y="178" fill="#62D6FF" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22">$ vibebus task lead "Review PR" "Claude reviews, Grok researches edge cases"</text>
+  <text x="38" y="217" fill="#CBD5E1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20">{ "task": "task_000042", "status": "open" }</text>
+  <text x="38" y="266" fill="#FFD166" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22">$ vibebus broadcast lead "ship the thing, but with tests"</text>
+</svg>

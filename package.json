@@ -1,0 +1,46 @@
+{
+  "name": "vibebus",
+  "version": "1.0.0",
+  "description": "A local MCP party line, skill, and task orchestrator for CLI coding agents.",
+  "type": "module",
+  "bin": {
+    "vibebus-mcp": "./bin/vibebus-mcp.js",
+    "vibebus": "./bin/vibebus.js",
+    "cli-team-mcp": "./bin/vibebus-mcp.js",
+    "cli-team": "./bin/vibebus.js"
+  },
+  "scripts": {
+    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/store.js && node --check src/tools.js && node --check skills/vibebus-orchestrator/scripts/register-session.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "mcp",
+    "cli",
+    "agents",
+    "coordination",
+    "codex",
+    "claude",
+    "gemini",
+    "antigravity",
+    "grok",
+    "windsurf",
+    "qwen",
+    "aider",
+    "goose",
+    "orchestrator",
+    "skill"
+  ],
+  "author": "Anshu <amananshu2004@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "assets",
+    "README.md",
+    "LICENSE"
+  ]
+}
