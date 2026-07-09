@@ -1,6 +1,6 @@
 <svg width="980" height="420" viewBox="0 0 980 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">VibeBus topology</title>
-  <desc id="desc">Multiple CLI agents connect to one local file-backed VibeBus MCP bus.</desc>
+  <title id="title">Vibe Bus topology</title>
+  <desc id="desc">Multiple CLI agents connect to one local file-backed Vibe Bus MCP bus.</desc>
   <defs>
     <linearGradient id="panel" x1="0" y1="0" x2="980" y2="420" gradientUnits="userSpaceOnUse">
       <stop stop-color="#111827"/>
@@ -22,7 +22,7 @@
     <path d="M735 312L573 242"/>
   </g>
   <rect x="374" y="126" width="232" height="168" rx="28" fill="#071114" stroke="url(#hub)" stroke-width="6"/>
-  <text x="419" y="189" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="34" font-weight="800">VibeBus</text>
+  <text x="410" y="189" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="34" font-weight="800">Vibe Bus</text>
   <text x="413" y="230" fill="#B9C7D9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19">shared MCP state</text>
   <text x="424" y="260" fill="#83F7C6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17">inbox tasks decisions</text>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700">

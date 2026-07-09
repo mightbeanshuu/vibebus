@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="VibeBus logo" width="920">
+  <img src="assets/logo.svg" alt="Vibe Bus logo" width="920">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 ## What It Is
 
-VibeBus is a local file-backed MCP server, terminal helper, and Codex skill for multi-agent coding work.
+Vibe Bus is a local file-backed MCP server, terminal helper, and Codex skill for multi-agent coding work.
 
 Each CLI starts its own stdio MCP server process, but every process shares one state file:
 
@@ -26,13 +26,14 @@ Each CLI starts its own stdio MCP server process, but every process shares one s
 That gives your agents a shared:
 
 - Inbox for direct messages and broadcasts.
+- Threads, replies, read cursors, and required acknowledgements.
 - Task board for claiming, blocking, and finishing work.
 - Decision log for architecture and constraint alignment.
 - Status board for who is doing what.
 - Client registry for Claude, Codex, Gemini, Antigravity, Grok, and friends.
 
 <p align="center">
-  <img src="assets/topology.svg" alt="VibeBus topology" width="980">
+  <img src="assets/topology.svg" alt="Vibe Bus topology" width="980">
 </p>
 
 ## Install
@@ -51,7 +52,7 @@ vibebus status
 ```
 
 <p align="center">
-  <img src="assets/terminal.svg" alt="VibeBus terminal preview" width="980">
+  <img src="assets/terminal.svg" alt="Vibe Bus terminal preview" width="980">
 </p>
 
 ## MCP Command
@@ -125,20 +126,30 @@ For any other CLI, the rule is the same: add a stdio MCP server named `vibebus` 
 
 ## Tools
 
-VibeBus exposes these MCP tools:
+Vibe Bus exposes these MCP tools:
 
 - `known_clients` - list normalized ids for major CLI/IDE agents.
 - `register_agent` - identify the current agent, role, provider, model, workspace, and capabilities.
 - `heartbeat` - update live status and current task.
-- `send_message` - send a direct message to one or more agents.
-- `broadcast` - send an instruction/update to every registered agent.
+- `send_message` - send a direct threaded message to one or more agents.
+- `send_to_role` - route a message to agents matching role, CLI, or provider.
+- `broadcast` - send a threaded instruction/update to every registered agent.
 - `read_inbox` - read visible messages, optionally marking them read.
+- `wait_for_messages` - bounded polling for new inbox messages.
+- `ack_message` - acknowledge receipt/completion of a required-ack message.
+- `read_thread` - read all visible messages in a conversation thread.
 - `create_task` - create shared work.
+- `handoff_task` - create/assign a task and send a required-ack handoff atomically.
 - `list_tasks` - inspect tasks by status or assignee.
 - `claim_task` - claim open or blocked work.
 - `update_task` - update status, assignee, files, and notes.
 - `record_decision` - store durable team decisions.
 - `team_status` - summarize agents, tasks, messages, decisions, and state path.
+
+Vibe Bus also exposes MCP resources and prompts:
+
+- `resources/list` / `resources/read`: `vibebus://status`, `vibebus://agents`, `vibebus://tasks`, `vibebus://messages`, `vibebus://decisions`, `vibebus://guide`.
+- `prompts/list` / `prompts/get`: `vibebus-start`, `vibebus-handoff`, `vibebus-review`.
 
 ## Human CLI
 
@@ -148,6 +159,10 @@ vibebus register codex-main codex implementer openai gpt-5.5
 vibebus register claude-review claude reviewer anthropic sonnet
 vibebus broadcast lead "Split work: Codex implements, Claude reviews, Grok researches edge cases."
 vibebus task lead "Add tests" "Cover inbox filtering, task claiming, and MCP handshake."
+vibebus handoff lead claude-review "Review README" "Check install docs and MCP examples."
+vibebus ack claude-review msg_000002 "Accepted."
+vibebus thread codex-main thread_000001
+vibebus wait codex-main 5000
 vibebus inbox codex-main
 vibebus claim codex-main task_000001
 vibebus done codex-main task_000001 "Tests passing."
@@ -166,20 +181,20 @@ cli-team-mcp
 The repo includes a Codex skill:
 
 ```text
-skills/vibebus-orchestrator/SKILL.md
+skills/vibebus/SKILL.md
 ```
 
 Install it into Codex:
 
 ```bash
 mkdir -p ~/.codex/skills
-cp -R skills/vibebus-orchestrator ~/.codex/skills/
+cp -R skills/vibebus ~/.codex/skills/
 ```
 
 Then ask:
 
 ```text
-Use $vibebus-orchestrator to coordinate Codex, Claude, Antigravity, Grok, and Gemini on this repo.
+Use $vibebus to coordinate Codex, Claude, Antigravity, Grok, and Gemini on this repo.
 ```
 
 ## Agent Workflow
@@ -187,10 +202,32 @@ Use $vibebus-orchestrator to coordinate Codex, Claude, Antigravity, Grok, and Ge
 1. Register at session start with `register_agent`.
 2. Read `team_status` and `read_inbox`.
 3. Claim a task with `claim_task`.
-4. Post progress with `heartbeat`.
-5. Send blockers or review asks with `send_message`.
-6. Record durable choices with `record_decision`.
-7. Mark tasks `done` with `update_task`.
+4. Use `handoff_task` or `send_message` with `requires_ack: true` for important delegation.
+5. Use `ack_message` when a handoff is accepted or completed.
+6. Use `read_thread` before replying in an active handoff.
+7. Post progress with `heartbeat`.
+8. Send blockers or review asks with `send_message`.
+9. Record durable choices with `record_decision`.
+10. Mark tasks `done` with `update_task`.
+
+## Design Notes
+
+The implementation follows the official MCP direction:
+
+- MCP uses JSON-RPC and stdio clients launch local servers as subprocesses, with valid MCP messages only on stdout.
+- Tools are model-controlled and should expose clear schemas; Vibe Bus returns both text and `structuredContent`.
+- Resources and prompts are first-class MCP server features, so Vibe Bus exposes status/resources and reusable coordination prompts for clients that discover them.
+- Claude Code and Gemini CLI both support stdio MCP server configuration; Gemini also discovers tools, resources, and prompts from configured servers.
+
+Primary references:
+
+- https://modelcontextprotocol.io/specification/2025-06-18
+- https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
+- https://modelcontextprotocol.io/specification/2025-06-18/server/tools
+- https://modelcontextprotocol.io/specification/2025-06-18/server/resources
+- https://modelcontextprotocol.io/specification/2025-06-18/server/prompts
+- https://code.claude.com/docs/en/mcp
+- https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md
 
 ## State
 

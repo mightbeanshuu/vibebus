@@ -1,6 +1,6 @@
 <svg width="980" height="300" viewBox="0 0 980 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">VibeBus terminal preview</title>
-  <desc id="desc">A terminal showing VibeBus commands for registering agents and creating tasks.</desc>
+  <title id="title">Vibe Bus terminal preview</title>
+  <desc id="desc">A terminal showing Vibe Bus commands for registering agents and creating tasks.</desc>
   <rect width="980" height="300" rx="26" fill="#09111F"/>
   <rect x="1.5" y="1.5" width="977" height="297" rx="24.5" stroke="#334155" stroke-width="3"/>
   <circle cx="42" cy="38" r="10" fill="#FF6B6B"/>

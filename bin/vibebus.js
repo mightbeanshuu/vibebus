@@ -13,11 +13,16 @@ Usage:
   vibebus register <agent_id> [cli] [role] [provider] [model]
   vibebus inbox <agent_id>
   vibebus send <from> <to> <message...>
+  vibebus role <from> <role> <message...>
   vibebus broadcast <from> <message...>
   vibebus task <from> <title> <description...>
+  vibebus handoff <from> <to> <title> <description...>
   vibebus tasks [status]
   vibebus claim <agent_id> <task_id>
   vibebus done <agent_id> <task_id> [note...]
+  vibebus ack <agent_id> <message_id> [note...]
+  vibebus thread <agent_id> <thread_id>
+  vibebus wait <agent_id> [timeout_ms]
 
 Legacy aliases also work: cli-team and cli-team-mcp.
 `;
@@ -46,12 +51,18 @@ async function main(argv) {
   } else if (command === "send") {
     const [from, to, ...message] = args;
     result = await callTool(store, "send_message", { from, to, message: message.join(" ") });
+  } else if (command === "role") {
+    const [from, role, ...message] = args;
+    result = await callTool(store, "send_to_role", { from, role, message: message.join(" "), requires_ack: true });
   } else if (command === "broadcast") {
     const [from, ...message] = args;
     result = await callTool(store, "broadcast", { from, message: message.join(" ") });
   } else if (command === "task") {
     const [from, title, ...description] = args;
     result = await callTool(store, "create_task", { from, title, description: description.join(" ") });
+  } else if (command === "handoff") {
+    const [from, to, title, ...description] = args;
+    result = await callTool(store, "handoff_task", { from, to, title, description: description.join(" ") });
   } else if (command === "tasks") {
     const [status] = args;
     result = await callTool(store, "list_tasks", { status });
@@ -61,6 +72,15 @@ async function main(argv) {
   } else if (command === "done") {
     const [agent_id, task_id, ...note] = args;
     result = await callTool(store, "update_task", { agent_id, task_id, status: "done", note: note.join(" ") });
+  } else if (command === "ack") {
+    const [agent_id, message_id, ...note] = args;
+    result = await callTool(store, "ack_message", { agent_id, message_id, note: note.join(" ") });
+  } else if (command === "thread") {
+    const [agent_id, thread_id] = args;
+    result = await callTool(store, "read_thread", { agent_id, thread_id });
+  } else if (command === "wait") {
+    const [agent_id, timeout_ms] = args;
+    result = await callTool(store, "wait_for_messages", { agent_id, unread_only: true, mark_read: true, timeout_ms });
   } else {
     throw new Error(`Unknown command: ${command}`);
   }

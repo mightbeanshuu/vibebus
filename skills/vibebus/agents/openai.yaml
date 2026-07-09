@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibe Bus"
+  short_description: "Coordinate CLI agents over one MCP bus."
+  default_prompt: "Use $vibebus to coordinate Codex, Claude, Gemini, Antigravity, Grok, and other CLI agents through Vibe Bus."

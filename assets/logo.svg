@@ -1,6 +1,6 @@
 <svg width="920" height="260" viewBox="0 0 920 260" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">VibeBus</title>
-  <desc id="desc">A neon terminal-style logo for VibeBus, the MCP coordination bus for CLI agents.</desc>
+  <title id="title">Vibe Bus</title>
+  <desc id="desc">A neon terminal-style logo for Vibe Bus, the MCP coordination bus for CLI agents.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="920" y2="260" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0B1020"/>
@@ -26,7 +26,7 @@
   <circle cx="362" cy="153" r="28" fill="#0B1020" stroke="#62D6FF" stroke-width="8"/>
   <circle cx="584" cy="139" r="28" fill="#0B1020" stroke="#FFD166" stroke-width="8"/>
   <circle cx="775" cy="81" r="28" fill="#0B1020" stroke="#FF6B6B" stroke-width="8"/>
-  <text x="70" y="96" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="62" font-weight="800" letter-spacing="-2">VibeBus</text>
+  <text x="70" y="96" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="62" font-weight="800" letter-spacing="-2">Vibe Bus</text>
   <text x="74" y="220" fill="#B9C7D9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24">one party line for CLI agents</text>
   <text x="602" y="220" fill="#83F7C6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24">MCP + CLI + Skill</text>
 </svg>

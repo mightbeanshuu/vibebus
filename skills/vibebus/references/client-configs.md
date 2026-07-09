@@ -1,6 +1,6 @@
-# VibeBus MCP Client Configs
+# Vibe Bus MCP Client Configs
 
-Use this reference only when installing or debugging VibeBus in a CLI/IDE.
+Use this reference only when installing or debugging Vibe Bus in a CLI/IDE.
 
 ## Command
 

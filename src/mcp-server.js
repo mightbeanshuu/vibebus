@@ -1,4 +1,5 @@
 import { createStore } from "./store.js";
+import { getPrompt, listResources, PROMPTS, readResource } from "./mcp-features.js";
 import { callTool, TOOL_DEFINITIONS } from "./tools.js";
 
 const SERVER_INFO = {
@@ -35,8 +36,13 @@ export async function handleRequest(store, request) {
   if (request.method === "initialize") {
     return resultResponse(request.id, {
       protocolVersion: request.params?.protocolVersion ?? "2024-11-05",
-      capabilities: { tools: {} },
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+      },
       serverInfo: SERVER_INFO,
+      instructions: "Use Vibe Bus to register agents, exchange threaded messages, acknowledge handoffs, and coordinate shared tasks.",
     });
   }
 
@@ -59,7 +65,25 @@ export async function handleRequest(store, request) {
           text: JSON.stringify(output, null, 2),
         },
       ],
+      structuredContent: output,
+      isError: false,
     });
+  }
+
+  if (request.method === "resources/list") {
+    return resultResponse(request.id, { resources: listResources() });
+  }
+
+  if (request.method === "resources/read") {
+    return resultResponse(request.id, readResource(store, request.params?.uri));
+  }
+
+  if (request.method === "prompts/list") {
+    return resultResponse(request.id, { prompts: PROMPTS });
+  }
+
+  if (request.method === "prompts/get") {
+    return resultResponse(request.id, getPrompt(request.params?.name, request.params?.arguments ?? {}));
   }
 
   return errorResponse(request.id, -32601, `Method not found: ${request.method}`);

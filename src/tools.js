@@ -63,7 +63,27 @@ export const TOOL_DEFINITIONS = [
       message: stringProp("Message body."),
       priority: enumProp(["low", "normal", "high", "urgent"], "Priority.", false),
       topic: stringProp("Optional topic/thread label.", false),
+      thread_id: stringProp("Existing thread id to attach this message to.", false),
+      reply_to: stringProp("Message id this message replies to.", false),
+      task_id: stringProp("Related task id.", false),
+      files: arrayProp("Related file paths.", false),
+      requires_ack: booleanProp("Require recipient acknowledgement.", false),
     }, ["from", "to", "message"]),
+  },
+  {
+    name: "send_to_role",
+    description: "Send one message to all registered agents matching a role, CLI, or provider.",
+    inputSchema: objectSchema({
+      from: stringProp("Sender agent id."),
+      message: stringProp("Message body."),
+      role: stringProp("Target agent role.", false),
+      cli: stringProp("Target CLI id.", false),
+      provider: stringProp("Target model/provider.", false),
+      priority: enumProp(["low", "normal", "high", "urgent"], "Priority.", false),
+      topic: stringProp("Optional topic/thread label.", false),
+      requires_ack: booleanProp("Require acknowledgements from recipients.", false),
+      exclude_self: booleanProp("Exclude sender from recipients.", false),
+    }, ["from", "message"]),
   },
   {
     name: "broadcast",
@@ -73,6 +93,11 @@ export const TOOL_DEFINITIONS = [
       message: stringProp("Message body."),
       priority: enumProp(["low", "normal", "high", "urgent"], "Priority.", false),
       topic: stringProp("Optional topic/thread label.", false),
+      thread_id: stringProp("Existing thread id to attach this message to.", false),
+      reply_to: stringProp("Message id this message replies to.", false),
+      task_id: stringProp("Related task id.", false),
+      files: arrayProp("Related file paths.", false),
+      requires_ack: booleanProp("Require recipient acknowledgement.", false),
       exclude_self: booleanProp("Exclude sender from inbox.", false),
     }, ["from", "message"]),
   },
@@ -84,8 +109,41 @@ export const TOOL_DEFINITIONS = [
       since_id: stringProp("Only return messages after this id.", false),
       unread_only: booleanProp("Only return messages after this agent's read cursor.", false),
       mark_read: booleanProp("Advance read cursor to latest returned message.", false),
+      include_acked: booleanProp("Include messages this agent has already acknowledged.", false),
       limit: numberProp("Maximum messages to return.", false),
     }, ["agent_id"]),
+  },
+  {
+    name: "wait_for_messages",
+    description: "Poll an agent inbox for new messages with a bounded timeout.",
+    inputSchema: objectSchema({
+      agent_id: stringProp("Agent id waiting on its inbox."),
+      since_id: stringProp("Only return messages after this id.", false),
+      unread_only: booleanProp("Only return messages after this agent's read cursor.", false),
+      mark_read: booleanProp("Advance read cursor to latest returned message.", false),
+      timeout_ms: numberProp("Maximum wait time, capped at 30000ms.", false),
+      poll_ms: numberProp("Poll interval, capped between 100ms and 5000ms.", false),
+      limit: numberProp("Maximum messages to return.", false),
+    }, ["agent_id"]),
+  },
+  {
+    name: "ack_message",
+    description: "Acknowledge receipt or completion of a message that requires acknowledgement.",
+    inputSchema: objectSchema({
+      agent_id: stringProp("Acknowledging agent id."),
+      message_id: stringProp("Message id to acknowledge."),
+      note: stringProp("Optional acknowledgement note.", false),
+    }, ["agent_id", "message_id"]),
+  },
+  {
+    name: "read_thread",
+    description: "Read all visible messages in a message thread.",
+    inputSchema: objectSchema({
+      agent_id: stringProp("Agent id reading the thread."),
+      thread_id: stringProp("Thread id."),
+      mark_read: booleanProp("Advance read cursor to latest returned message.", false),
+      limit: numberProp("Maximum messages to return.", false),
+    }, ["agent_id", "thread_id"]),
   },
   {
     name: "create_task",
@@ -98,6 +156,20 @@ export const TOOL_DEFINITIONS = [
       priority: enumProp(["low", "normal", "high", "urgent"], "Priority.", false),
       files: arrayProp("Related file paths.", false),
     }, ["from", "title"]),
+  },
+  {
+    name: "handoff_task",
+    description: "Create or assign a task and send a required-ack handoff message in one atomic update.",
+    inputSchema: objectSchema({
+      from: stringProp("Sender agent id."),
+      to: recipientProp("Recipient agent id or ids."),
+      title: stringProp("Task title."),
+      description: stringProp("Task details.", false),
+      priority: enumProp(["low", "normal", "high", "urgent"], "Priority.", false),
+      files: arrayProp("Related file paths.", false),
+      message: stringProp("Handoff message. Defaults to task description.", false),
+      topic: stringProp("Topic/thread label.", false),
+    }, ["from", "to", "title"]),
   },
   {
     name: "list_tasks",
@@ -157,12 +229,22 @@ export async function callTool(store, name, input = {}) {
       return heartbeat(store, input);
     case "send_message":
       return sendMessage(store, input);
+    case "send_to_role":
+      return sendToRole(store, input);
     case "broadcast":
       return broadcast(store, input);
     case "read_inbox":
       return readInbox(store, input);
+    case "wait_for_messages":
+      return waitForMessages(store, input);
+    case "ack_message":
+      return ackMessage(store, input);
+    case "read_thread":
+      return readThread(store, input);
     case "create_task":
       return createTask(store, input);
+    case "handoff_task":
+      return handoffTask(store, input);
     case "list_tasks":
       return listTasks(store, input);
     case "claim_task":
@@ -182,7 +264,7 @@ function knownClients() {
   return {
     ok: true,
     clients: KNOWN_CLIENTS,
-    note: "Use a custom cli value when your agent is not listed; VibeBus is MCP-client agnostic.",
+    note: "Use a custom cli value when your agent is not listed; Vibe Bus is MCP-client agnostic.",
   };
 }
 
@@ -251,10 +333,48 @@ function sendMessage(store, input) {
       message: input.message,
       priority: input.priority,
       topic: input.topic,
+      thread_id: input.thread_id,
+      reply_to: input.reply_to,
+      task_id: input.task_id,
+      files: input.files,
+      requires_ack: Boolean(input.requires_ack),
     });
     state.messages.push(message);
     touchAgent(state, input.from);
     return { ok: true, message };
+  });
+}
+
+function sendToRole(store, input) {
+  requireString(input, "from");
+  requireString(input, "message");
+  if (!input.role && !input.cli && !input.provider) {
+    throw new Error("At least one of role, cli, or provider is required");
+  }
+
+  return store.update((state) => {
+    const recipients = Object.values(state.agents)
+      .filter((agent) => !input.role || agent.role === input.role)
+      .filter((agent) => !input.cli || agent.cli === input.cli)
+      .filter((agent) => !input.provider || agent.provider === input.provider)
+      .filter((agent) => !(input.exclude_self && agent.agent_id === input.from))
+      .map((agent) => agent.agent_id);
+
+    if (recipients.length === 0) {
+      throw new Error("No registered agents matched the requested role/cli/provider");
+    }
+
+    const message = makeMessage(state, {
+      from: input.from,
+      to: recipients,
+      message: input.message,
+      priority: input.priority,
+      topic: input.topic,
+      requires_ack: Boolean(input.requires_ack),
+    });
+    state.messages.push(message);
+    touchAgent(state, input.from);
+    return { ok: true, recipients, message };
   });
 }
 
@@ -269,6 +389,11 @@ function broadcast(store, input) {
       message: input.message,
       priority: input.priority,
       topic: input.topic,
+      thread_id: input.thread_id,
+      reply_to: input.reply_to,
+      task_id: input.task_id,
+      files: input.files,
+      requires_ack: Boolean(input.requires_ack),
       exclude_self: Boolean(input.exclude_self),
     });
     state.messages.push(message);
@@ -282,19 +407,77 @@ function readInbox(store, input) {
   const limit = normalizeLimit(input.limit);
 
   return store.update((state) => {
-    const lastReadId = state.reads[input.agent_id] ?? "";
+    const lastReadId = state.reads[input.agent_id]?.inbox ?? state.reads[input.agent_id] ?? "";
     const since = input.since_id || (input.unread_only ? lastReadId : "");
     const messages = state.messages
       .filter((message) => isVisibleTo(message, input.agent_id))
       .filter((message) => !since || compareIds(message.id, since) > 0)
+      .filter((message) => input.include_acked || !hasAcked(message, input.agent_id))
       .slice(-limit);
 
     if (input.mark_read && messages.length > 0) {
-      state.reads[input.agent_id] = messages[messages.length - 1].id;
+      state.reads[input.agent_id] = normalizeReadState(state.reads[input.agent_id]);
+      state.reads[input.agent_id].inbox = messages[messages.length - 1].id;
     }
 
     touchAgent(state, input.agent_id);
-    return { ok: true, messages, read_cursor: state.reads[input.agent_id] ?? lastReadId };
+    return { ok: true, messages, read_cursor: normalizeReadState(state.reads[input.agent_id]).inbox || lastReadId };
+  });
+}
+
+async function waitForMessages(store, input) {
+  requireString(input, "agent_id");
+  const timeoutMs = Math.min(Math.max(Number.parseInt(input.timeout_ms ?? 1500, 10) || 1500, 0), 30000);
+  const pollMs = Math.min(Math.max(Number.parseInt(input.poll_ms ?? 250, 10) || 250, 100), 5000);
+  const startedAt = Date.now();
+
+  while (true) {
+    const result = readInbox(store, input);
+    if (result.messages.length > 0 || Date.now() - startedAt >= timeoutMs) {
+      return { ...result, waited_ms: Date.now() - startedAt, timed_out: result.messages.length === 0 };
+    }
+    await sleep(pollMs);
+  }
+}
+
+function ackMessage(store, input) {
+  requireString(input, "agent_id");
+  requireString(input, "message_id");
+
+  return store.update((state) => {
+    const message = findMessage(state, input.message_id);
+    if (!isVisibleTo(message, input.agent_id)) {
+      throw new Error(`Message ${input.message_id} is not visible to ${input.agent_id}`);
+    }
+    message.acks ??= {};
+    message.acks[input.agent_id] = {
+      agent_id: input.agent_id,
+      note: input.note ?? "",
+      created_at: timestamp(),
+    };
+    touchAgent(state, input.agent_id);
+    return { ok: true, message, pending_ack: pendingAckFor(message, state) };
+  });
+}
+
+function readThread(store, input) {
+  requireString(input, "agent_id");
+  requireString(input, "thread_id");
+  const limit = normalizeLimit(input.limit);
+
+  return store.update((state) => {
+    const messages = state.messages
+      .filter((message) => message.thread_id === input.thread_id)
+      .filter((message) => isVisibleTo(message, input.agent_id))
+      .slice(-limit);
+
+    if (input.mark_read && messages.length > 0) {
+      state.reads[input.agent_id] = normalizeReadState(state.reads[input.agent_id]);
+      state.reads[input.agent_id].inbox = messages[messages.length - 1].id;
+    }
+
+    touchAgent(state, input.agent_id);
+    return { ok: true, thread_id: input.thread_id, messages };
   });
 }
 
@@ -320,6 +503,46 @@ function createTask(store, input) {
     state.tasks.push(task);
     touchAgent(state, input.from);
     return { ok: true, task };
+  });
+}
+
+function handoffTask(store, input) {
+  requireString(input, "from");
+  requireRecipient(input, "to");
+  requireString(input, "title");
+
+  return store.update((state) => {
+    const now = timestamp();
+    const recipients = Array.isArray(input.to) ? input.to : [input.to];
+    const firstAssignee = recipients.length === 1 && recipients[0] !== "*" ? recipients[0] : null;
+    const task = {
+      id: nextId(state, "task"),
+      title: input.title,
+      description: input.description ?? "",
+      status: firstAssignee ? "claimed" : "open",
+      priority: input.priority ?? "normal",
+      creator: input.from,
+      assignee: firstAssignee,
+      files: input.files ?? [],
+      notes: [note(input.from, "handoff created")],
+      created_at: now,
+      updated_at: now,
+    };
+    state.tasks.push(task);
+
+    const message = makeMessage(state, {
+      from: input.from,
+      to: input.to,
+      message: input.message || input.description || input.title,
+      priority: input.priority,
+      topic: input.topic ?? "handoff",
+      task_id: task.id,
+      files: input.files,
+      requires_ack: true,
+    });
+    state.messages.push(message);
+    touchAgent(state, input.from);
+    return { ok: true, task, message, pending_ack: pendingAckFor(message, state) };
   });
 }
 
@@ -411,13 +634,24 @@ function teamStatus(store, input) {
 }
 
 function makeMessage(state, input) {
+  const replyTo = input.reply_to ? findMessage(state, input.reply_to) : null;
+  const recipients = resolveRecipients(state, input.to, input.from, Boolean(input.exclude_self));
+  const threadId = input.thread_id ?? replyTo?.thread_id ?? nextId(state, "thread");
+
   return {
     id: nextId(state, "msg"),
+    thread_id: threadId,
     from: input.from,
     to: input.to,
     message: input.message,
     priority: input.priority ?? "normal",
     topic: input.topic ?? null,
+    reply_to: input.reply_to ?? null,
+    task_id: input.task_id ?? null,
+    files: input.files ?? [],
+    requires_ack: Boolean(input.requires_ack),
+    recipients,
+    acks: {},
     exclude_self: Boolean(input.exclude_self),
     created_at: timestamp(),
   };
@@ -434,6 +668,31 @@ function isVisibleTo(message, agentId) {
     return true;
   }
   return message.from === agentId;
+}
+
+function resolveRecipients(state, to, from, excludeSelf = false) {
+  const recipients = to === "*" ? Object.keys(state.agents) : Array.isArray(to) ? to : [to];
+  return [...new Set(recipients.filter((agentId) => agentId && !(excludeSelf && agentId === from)))];
+}
+
+function hasAcked(message, agentId) {
+  return Boolean(message.acks?.[agentId]);
+}
+
+function pendingAckFor(message, state) {
+  if (!message.requires_ack) {
+    return [];
+  }
+  const recipients = message.recipients?.length ? message.recipients : resolveRecipients(state, message.to, message.from, message.exclude_self);
+  return recipients.filter((agentId) => !message.acks?.[agentId]);
+}
+
+function findMessage(state, messageId) {
+  const message = state.messages.find((item) => item.id === messageId);
+  if (!message) {
+    throw new Error(`Unknown message: ${messageId}`);
+  }
+  return message;
 }
 
 function findTask(state, taskId) {
@@ -465,6 +724,20 @@ function touchAgent(state, agentId) {
 
 function note(agentId, text) {
   return { agent_id: agentId, text, created_at: timestamp() };
+}
+
+function normalizeReadState(value) {
+  if (!value) {
+    return { inbox: "" };
+  }
+  if (typeof value === "string") {
+    return { inbox: value };
+  }
+  return { inbox: value.inbox ?? "" };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function requireString(input, key) {

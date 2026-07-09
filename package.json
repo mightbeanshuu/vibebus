@@ -1,7 +1,7 @@
 {
   "name": "vibebus",
   "version": "1.0.0",
-  "description": "A local MCP party line, skill, and task orchestrator for CLI coding agents.",
+  "description": "A local MCP party line, skill, and task bus for CLI coding agents.",
   "type": "module",
   "bin": {
     "vibebus-mcp": "./bin/vibebus-mcp.js",
@@ -10,7 +10,7 @@
     "cli-team": "./bin/vibebus.js"
   },
   "scripts": {
-    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/store.js && node --check src/tools.js && node --check skills/vibebus-orchestrator/scripts/register-session.js",
+    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/mcp-features.js && node --check src/store.js && node --check src/tools.js && node --check skills/vibebus/scripts/register-session.js",
     "test": "node --test"
   },
   "keywords": [
@@ -27,7 +27,7 @@
     "qwen",
     "aider",
     "goose",
-    "orchestrator",
+    "handoff",
     "skill"
   ],
   "author": "Anshu <amananshu2004@gmail.com>",
