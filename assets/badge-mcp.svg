@@ -1,0 +1,7 @@
+<svg width="124" height="30" viewBox="0 0 124 30" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MCP stdio">
+  <rect width="124" height="30" rx="7" fill="#111827"/>
+  <rect x="52" width="72" height="30" rx="7" fill="#62D6FF"/>
+  <path d="M52 0h8v30h-8z" fill="#62D6FF"/>
+  <text x="16" y="20" fill="#E5E7EB" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700">MCP</text>
+  <text x="70" y="20" fill="#0B1020" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="800">STDIO</text>
+</svg>

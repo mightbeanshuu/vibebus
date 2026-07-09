@@ -8,9 +8,17 @@
 </p>
 
 <p align="center">
-  <img alt="Node >=18" src="https://img.shields.io/badge/node-%3E%3D18-83F7C6?style=for-the-badge&labelColor=111827">
-  <img alt="MCP stdio" src="https://img.shields.io/badge/MCP-stdio-62D6FF?style=for-the-badge&labelColor=111827">
-  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-FFD166?style=for-the-badge&labelColor=111827">
+  <a href="https://mightbeanshuu.github.io/vibebus/">Landing page</a>
+  ·
+  <a href="https://github.com/mightbeanshuu/vibebus">GitHub</a>
+  ·
+  <a href="#install">Install</a>
+</p>
+
+<p align="center">
+  <img alt="Node >=18" src="assets/badge-node.svg">
+  <img alt="MCP stdio" src="assets/badge-mcp.svg">
+  <img alt="License MIT" src="assets/badge-license.svg">
 </p>
 
 ## What It Is
@@ -49,6 +57,13 @@ Then verify:
 ```bash
 vibebus clients
 vibebus status
+```
+
+Prefer raw MCP-shaped data?
+
+```bash
+vibebus clients --json
+vibebus status --json
 ```
 
 <p align="center">
@@ -168,6 +183,8 @@ vibebus claim codex-main task_000001
 vibebus done codex-main task_000001 "Tests passing."
 vibebus status
 ```
+
+Default CLI output is formatted for humans. Add `--json` to any command for the raw payload.
 
 Legacy aliases still work:
 

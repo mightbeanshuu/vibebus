@@ -5,7 +5,7 @@ import { callTool } from "../src/tools.js";
 
 const HELP = `vibebus
 
-Human terminal helper for the VibeBus MCP shared agent bus.
+Human terminal helper for the Vibe Bus MCP shared agent bus.
 
 Usage:
   vibebus clients
@@ -24,11 +24,16 @@ Usage:
   vibebus thread <agent_id> <thread_id>
   vibebus wait <agent_id> [timeout_ms]
 
+Options:
+  --json   Print raw JSON output.
+
 Legacy aliases also work: cli-team and cli-team-mcp.
 `;
 
 async function main(argv) {
   const store = createStore({ env: process.env });
+  const json = argv.includes("--json");
+  argv = argv.filter((arg) => arg !== "--json");
   const [command, ...args] = argv;
 
   if (!command || command === "-h" || command === "--help") {
@@ -85,10 +90,168 @@ async function main(argv) {
     throw new Error(`Unknown command: ${command}`);
   }
 
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.stdout.write(json ? `${JSON.stringify(result, null, 2)}\n` : formatResult(command, result));
 }
 
 main(process.argv.slice(2)).catch((error) => {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;
 });
+
+function formatResult(command, result) {
+  if (command === "clients") {
+    return [
+      `Vibe Bus clients (${result.clients.length})`,
+      "",
+      table(
+        ["id", "provider", "label"],
+        result.clients.map((client) => [client.id, client.provider, client.label]),
+      ),
+      "",
+      "Tip: use `vibebus clients --json` for the raw MCP payload.",
+    ].join("\n") + "\n";
+  }
+
+  if (command === "status") {
+    return formatStatus(result);
+  }
+
+  if (command === "register") {
+    const agent = result.agent;
+    return `Registered ${agent.agent_id} as ${agent.role} (${agent.cli}${agent.provider ? `/${agent.provider}` : ""}).\n`;
+  }
+
+  if (command === "inbox" || command === "wait") {
+    const header = command === "wait" ? `Inbox wait: ${result.timed_out ? "timed out" : "new messages"} (${result.waited_ms}ms)` : `Inbox (${result.messages.length})`;
+    return `${header}\n\n${formatMessages(result.messages)}\n`;
+  }
+
+  if (command === "send" || command === "broadcast" || command === "role") {
+    return formatMessageResult(result);
+  }
+
+  if (command === "task" || command === "handoff") {
+    const parts = [`Task ${result.task.id}: ${result.task.title}`, `status=${result.task.status}`, `assignee=${result.task.assignee ?? "-"}`];
+    if (result.message) {
+      parts.push(`message=${result.message.id}`);
+      parts.push(`thread=${result.message.thread_id}`);
+    }
+    if (result.pending_ack?.length) {
+      parts.push(`pending_ack=${result.pending_ack.join(",")}`);
+    }
+    return `${parts.join("  ")}\n`;
+  }
+
+  if (command === "tasks") {
+    return formatTasks(result.tasks);
+  }
+
+  if (command === "claim" || command === "done") {
+    return `Task ${result.task.id}: ${result.task.status}  assignee=${result.task.assignee ?? "-"}  title=${result.task.title}\n`;
+  }
+
+  if (command === "ack") {
+    return `Acked ${result.message.id}. Pending: ${result.pending_ack.length ? result.pending_ack.join(", ") : "none"}\n`;
+  }
+
+  if (command === "thread") {
+    return `Thread ${result.thread_id}\n\n${formatMessages(result.messages)}\n`;
+  }
+
+  return `${JSON.stringify(result, null, 2)}\n`;
+}
+
+function formatStatus(result) {
+  const sections = [
+    "Vibe Bus status",
+    "",
+    `State: ${result.state_path}`,
+    "",
+    "Agents",
+    result.agents.length ? table(["id", "cli", "role", "status", "note"], result.agents.map((agent) => [
+      agent.agent_id,
+      agent.cli,
+      agent.role,
+      agent.status ?? "-",
+      agent.note ?? "",
+    ])) : "No registered agents yet.",
+    "",
+    "Open tasks",
+    result.open_tasks.length ? taskTable(result.open_tasks) : "No open tasks.",
+    "",
+    "Recent messages",
+    result.recent_messages.length ? formatMessages(result.recent_messages) : "No messages yet.",
+  ];
+
+  return `${sections.join("\n")}\n`;
+}
+
+function formatMessageResult(result) {
+  const message = result.message;
+  const recipients = result.recipients?.join(",") || formatRecipient(message.to);
+  const pending = result.pending_ack?.length ? `  pending_ack=${result.pending_ack.join(",")}` : "";
+  return `Message ${message.id} -> ${recipients}  thread=${message.thread_id}  priority=${message.priority}${pending}\n`;
+}
+
+function formatMessages(messages) {
+  if (!messages.length) {
+    return "No messages.";
+  }
+  return table(
+    ["id", "thread", "from", "to", "prio", "ack", "message"],
+    messages.map((message) => [
+      message.id,
+      message.thread_id ?? "-",
+      message.from,
+      formatRecipient(message.to),
+      message.priority ?? "normal",
+      message.requires_ack ? ackSummary(message) : "-",
+      message.message,
+    ]),
+  );
+}
+
+function formatTasks(tasks) {
+  if (!tasks.length) {
+    return "No tasks.\n";
+  }
+  return `${taskTable(tasks)}\n`;
+}
+
+function taskTable(tasks) {
+  return table(
+    ["id", "status", "assignee", "prio", "title"],
+    tasks.map((task) => [
+      task.id,
+      task.status,
+      task.assignee ?? "-",
+      task.priority ?? "normal",
+      task.title,
+    ]),
+  );
+}
+
+function table(headers, rows) {
+  const widths = headers.map((header, index) =>
+    Math.min(34, Math.max(header.length, ...rows.map((row) => String(row[index] ?? "").length))),
+  );
+  const render = (row) => row.map((cell, index) => truncate(String(cell ?? ""), widths[index]).padEnd(widths[index])).join("  ").trimEnd();
+  return [render(headers), render(headers.map((header, index) => "-".repeat(Math.min(header.length + 2, widths[index])))), ...rows.map(render)].join("\n");
+}
+
+function truncate(value, width) {
+  if (value.length <= width) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function formatRecipient(to) {
+  return Array.isArray(to) ? to.join(",") : to;
+}
+
+function ackSummary(message) {
+  const acked = Object.keys(message.acks ?? {}).length;
+  const total = message.recipients?.length ?? 0;
+  return `${acked}/${total}`;
+}

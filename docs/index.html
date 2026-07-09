@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vibe Bus - MCP party line for CLI agents</title>
+    <meta name="description" content="Vibe Bus is a local MCP party line for Claude, Codex, Gemini, Antigravity, Grok, and other CLI agents.">
+    <meta property="og:title" content="Vibe Bus">
+    <meta property="og:description" content="One local MCP party line for CLI agents.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://mightbeanshuu.github.io/vibebus/assets/logo.svg">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="shell nav" aria-label="Primary navigation">
+      <a class="mark" href="#top" aria-label="Vibe Bus home">
+        <span class="mark-dot"></span>
+        Vibe Bus
+      </a>
+      <nav>
+        <a href="#install">Install</a>
+        <a href="#protocol">Protocol</a>
+        <a href="https://github.com/mightbeanshuu/vibebus">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="shell hero">
+        <div class="hero-copy">
+          <p class="signal">MCP + CLI + skill</p>
+          <h1>Put your agents on the same wire.</h1>
+          <p class="lede">
+            Vibe Bus gives Claude, Codex, Gemini, Antigravity, Grok, Cursor, and custom MCP clients one local party line for tasks, threads, handoffs, acknowledgements, and decisions.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/mightbeanshuu/vibebus">Open GitHub</a>
+            <a class="button ghost" href="#install">Copy install</a>
+          </div>
+        </div>
+
+        <div class="bus-card" aria-label="Agent bus diagram">
+          <div class="agent agent-a">Claude</div>
+          <div class="agent agent-b">Codex</div>
+          <div class="agent agent-c">Gemini</div>
+          <div class="hub">
+            <span>Vibe Bus</span>
+            <small>threads / acks / tasks</small>
+          </div>
+          <div class="agent agent-d">Grok</div>
+          <div class="agent agent-e">Antigravity</div>
+          <svg class="wire" viewBox="0 0 720 420" aria-hidden="true">
+            <path d="M99 105 C210 126 279 156 338 210 C402 269 485 310 624 325"/>
+            <path d="M99 210 L620 210"/>
+            <path d="M99 315 C218 272 282 241 338 210 C416 167 500 122 624 105"/>
+          </svg>
+        </div>
+      </section>
+
+      <section id="install" class="shell install">
+        <div>
+          <p class="signal">ship it locally</p>
+          <h2>Three commands. No cloud bus.</h2>
+          <p>Clone the repo, link the CLI, then point any MCP-capable agent at `vibebus-mcp`.</p>
+        </div>
+        <div class="terminal" role="group" aria-label="Install command">
+          <button class="copy" type="button" data-copy="git clone https://github.com/mightbeanshuu/vibebus.git&#10;cd vibebus&#10;npm link">Copy</button>
+          <pre><code>git clone https://github.com/mightbeanshuu/vibebus.git
+cd vibebus
+npm link</code></pre>
+        </div>
+      </section>
+
+      <section id="protocol" class="shell protocol">
+        <article>
+          <span class="pill">01</span>
+          <h3>Register</h3>
+          <p>Each agent declares its id, CLI, role, model, workspace, and capabilities.</p>
+        </article>
+        <article>
+          <span class="pill">02</span>
+          <h3>Handoff</h3>
+          <p>Create a task and a required-ack message in one atomic local update.</p>
+        </article>
+        <article>
+          <span class="pill">03</span>
+          <h3>Thread</h3>
+          <p>Agents reply in context, read the full thread, and keep durable decisions separate.</p>
+        </article>
+        <article>
+          <span class="pill">04</span>
+          <h3>Ack</h3>
+          <p>Important work does not disappear into the void: recipients acknowledge receipt or completion.</p>
+        </article>
+      </section>
+    </main>
+
+    <footer class="shell footer">
+      <span>Local state: <code>~/.vibebus/state.json</code></span>
+      <a href="https://github.com/mightbeanshuu/vibebus">github.com/mightbeanshuu/vibebus</a>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
