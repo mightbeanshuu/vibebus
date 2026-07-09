@@ -3,102 +3,189 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vibe Bus - MCP party line for CLI agents</title>
+    <meta name="theme-color" content="#0a0e17">
+    <title>Vibe Bus — MCP party line for CLI agents</title>
     <meta name="description" content="Vibe Bus is a local MCP party line for Claude, Codex, Gemini, Antigravity, Grok, and other CLI agents.">
     <meta property="og:title" content="Vibe Bus">
     <meta property="og:description" content="One local MCP party line for CLI agents.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="https://mightbeanshuu.github.io/vibebus/assets/logo.svg">
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js"
+        }
+      }
+    </script>
   </head>
   <body>
-    <header class="shell nav" aria-label="Primary navigation">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="page-grid" aria-hidden="true"></div>
+
+    <header class="shell nav" data-nav>
       <a class="mark" href="#top" aria-label="Vibe Bus home">
-        <span class="mark-dot"></span>
-        Vibe Bus
+        <span class="mark-dot" aria-hidden="true"></span>
+        <span>Vibe Bus</span>
       </a>
-      <nav>
+      <nav aria-label="Site">
         <a href="#install">Install</a>
         <a href="#protocol">Protocol</a>
-        <a href="https://github.com/mightbeanshuu/vibebus">GitHub</a>
+        <a href="https://github.com/mightbeanshuu/vibebus" target="_blank" rel="noreferrer">GitHub</a>
       </nav>
     </header>
 
-    <main id="top">
-      <section class="shell hero">
+    <main id="main">
+      <section id="top" class="shell hero">
         <div class="hero-copy">
-          <p class="signal">MCP + CLI + skill</p>
+          <p class="eyebrow">
+            <span class="pulse" aria-hidden="true"></span>
+            MCP + CLI + skill
+          </p>
           <h1>Put your agents on the same wire.</h1>
           <p class="lede">
-            Vibe Bus gives Claude, Codex, Gemini, Antigravity, Grok, Cursor, and custom MCP clients one local party line for tasks, threads, handoffs, acknowledgements, and decisions.
+            One local party line for tasks, threads, handoffs, acknowledgements, and decisions — shared across Claude, Codex, Gemini, Grok, Cursor, and any MCP client.
           </p>
           <div class="actions">
-            <a class="button primary" href="https://github.com/mightbeanshuu/vibebus">Open GitHub</a>
-            <a class="button ghost" href="#install">Copy install</a>
+            <a class="btn btn-primary" href="https://github.com/mightbeanshuu/vibebus" target="_blank" rel="noreferrer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77 5.44 5.44 0 0 0 3.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+              Open GitHub
+            </a>
+            <a class="btn btn-ghost" href="#install">Get started</a>
           </div>
+          <ul class="agent-chips" aria-label="Supported agents">
+            <li>Claude</li>
+            <li>Codex</li>
+            <li>Gemini</li>
+            <li>Grok</li>
+            <li>Cursor</li>
+            <li>Antigravity</li>
+          </ul>
         </div>
 
-        <div class="bus-card" aria-label="Agent bus diagram">
-          <div class="agent agent-a">Claude</div>
-          <div class="agent agent-b">Codex</div>
-          <div class="agent agent-c">Gemini</div>
-          <div class="hub">
-            <span>Vibe Bus</span>
-            <small>threads / acks / tasks</small>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="visual-frame">
+            <canvas id="bus-canvas"></canvas>
           </div>
-          <div class="agent agent-d">Grok</div>
-          <div class="agent agent-e">Antigravity</div>
-          <svg class="wire" viewBox="0 0 720 420" aria-hidden="true">
-            <path d="M99 105 C210 126 279 156 338 210 C402 269 485 310 624 325"/>
-            <path d="M99 210 L620 210"/>
-            <path d="M99 315 C218 272 282 241 338 210 C416 167 500 122 624 105"/>
-          </svg>
         </div>
       </section>
 
+      <section class="shell metrics" aria-label="Highlights">
+        <article>
+          <strong>Local</strong>
+          <span>File-backed state at <code>~/.vibebus/state.json</code></span>
+        </article>
+        <article>
+          <strong>12 tools</strong>
+          <span>MCP server for inbox, tasks, threads, and decisions</span>
+        </article>
+        <article>
+          <strong>Zero cloud</strong>
+          <span>No hosted bus — your machine, your agents</span>
+        </article>
+      </section>
+
       <section id="install" class="shell install">
-        <div>
-          <p class="signal">ship it locally</p>
-          <h2>Three commands. No cloud bus.</h2>
-          <p>Clone the repo, link the CLI, then point any MCP-capable agent at `vibebus-mcp`.</p>
+        <div class="install-copy">
+          <p class="eyebrow">ship it locally</p>
+          <h2>Three commands.<br>No cloud bus.</h2>
+          <p>Clone, link the CLI, then point any MCP-capable agent at <code>vibebus-mcp</code>.</p>
         </div>
-        <div class="terminal" role="group" aria-label="Install command">
-          <button class="copy" type="button" data-copy="git clone https://github.com/mightbeanshuu/vibebus.git&#10;cd vibebus&#10;npm link">Copy</button>
-          <pre><code>git clone https://github.com/mightbeanshuu/vibebus.git
-cd vibebus
-npm link</code></pre>
+
+        <div class="install-panels">
+          <div class="terminal" role="group" aria-label="Install commands">
+            <div class="terminal-bar">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+              <span class="terminal-title">install.sh</span>
+              <button class="copy-btn" type="button" data-copy="git clone https://github.com/mightbeanshuu/vibebus.git&#10;cd vibebus&#10;npm link" aria-label="Copy install commands">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy</span>
+              </button>
+            </div>
+            <pre><code><span class="prompt">$</span> git clone https://github.com/mightbeanshuu/vibebus.git
+<span class="prompt">$</span> cd vibebus
+<span class="prompt">$</span> npm link</code></pre>
+          </div>
+
+          <div class="terminal terminal-muted" role="group" aria-label="MCP configuration">
+            <div class="terminal-bar">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+              <span class="terminal-title">mcp.json</span>
+              <button class="copy-btn" type="button" data-copy="{&#10;  &quot;mcpServers&quot;: {&#10;    &quot;vibebus&quot;: {&#10;      &quot;command&quot;: &quot;vibebus-mcp&quot;&#10;    }&#10;  }&#10;}" aria-label="Copy MCP configuration">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy</span>
+              </button>
+            </div>
+            <pre><code>{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"vibebus"</span>: {
+      <span class="key">"command"</span>: <span class="str">"vibebus-mcp"</span>
+    }
+  }
+}</code></pre>
+          </div>
         </div>
       </section>
 
       <section id="protocol" class="shell protocol">
-        <article>
-          <span class="pill">01</span>
-          <h3>Register</h3>
-          <p>Each agent declares its id, CLI, role, model, workspace, and capabilities.</p>
-        </article>
-        <article>
-          <span class="pill">02</span>
-          <h3>Handoff</h3>
-          <p>Create a task and a required-ack message in one atomic local update.</p>
-        </article>
-        <article>
-          <span class="pill">03</span>
-          <h3>Thread</h3>
-          <p>Agents reply in context, read the full thread, and keep durable decisions separate.</p>
-        </article>
-        <article>
-          <span class="pill">04</span>
-          <h3>Ack</h3>
-          <p>Important work does not disappear into the void: recipients acknowledge receipt or completion.</p>
-        </article>
+        <header class="section-head">
+          <p class="eyebrow">the protocol</p>
+          <h2>How agents stay in sync.</h2>
+        </header>
+
+        <div class="protocol-grid">
+          <article>
+            <div class="card-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span class="step">01</span>
+            <h3>Register</h3>
+            <p>Each agent declares its id, CLI, role, model, workspace, and capabilities.</p>
+          </article>
+          <article>
+            <div class="card-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/></svg>
+            </div>
+            <span class="step">02</span>
+            <h3>Handoff</h3>
+            <p>Create a task and a required-ack message in one atomic local update.</p>
+          </article>
+          <article>
+            <div class="card-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <span class="step">03</span>
+            <h3>Thread</h3>
+            <p>Agents reply in context, read the full thread, and keep durable decisions separate.</p>
+          </article>
+          <article>
+            <div class="card-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            </div>
+            <span class="step">04</span>
+            <h3>Ack</h3>
+            <p>Important work does not disappear into the void — recipients acknowledge receipt or completion.</p>
+          </article>
+        </div>
       </section>
     </main>
 
     <footer class="shell footer">
-      <span>Local state: <code>~/.vibebus/state.json</code></span>
-      <a href="https://github.com/mightbeanshuu/vibebus">github.com/mightbeanshuu/vibebus</a>
+      <div class="footer-brand">
+        <span class="mark-dot" aria-hidden="true"></span>
+        <span>Vibe Bus</span>
+      </div>
+      <p>MIT · local MCP coordination for CLI agents</p>
+      <a href="https://github.com/mightbeanshuu/vibebus" target="_blank" rel="noreferrer">github.com/mightbeanshuu/vibebus</a>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="script.js" type="module"></script>
+    <script src="hero-scene.js" type="module"></script>
   </body>
 </html>

@@ -1,0 +1,32 @@
+<svg width="920" height="260" viewBox="0 0 920 260" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Vibe Bus</title>
+  <desc id="desc">A neon terminal-style logo for Vibe Bus, the MCP coordination bus for CLI agents.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="920" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="0.56" stop-color="#14243A"/>
+      <stop offset="1" stop-color="#071114"/>
+    </linearGradient>
+    <linearGradient id="wire" x1="87" y1="58" x2="826" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#83F7C6"/>
+      <stop offset="0.5" stop-color="#62D6FF"/>
+      <stop offset="1" stop-color="#FFD166"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="920" height="260" rx="34" fill="url(#bg)"/>
+  <path d="M74 185C185 72 281 72 362 153C425 216 508 216 584 139C656 67 759 58 846 112" stroke="url(#wire)" stroke-width="10" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="147" cy="120" r="28" fill="#0B1020" stroke="#83F7C6" stroke-width="8"/>
+  <circle cx="362" cy="153" r="28" fill="#0B1020" stroke="#62D6FF" stroke-width="8"/>
+  <circle cx="584" cy="139" r="28" fill="#0B1020" stroke="#FFD166" stroke-width="8"/>
+  <circle cx="775" cy="81" r="28" fill="#0B1020" stroke="#FF6B6B" stroke-width="8"/>
+  <text x="70" y="96" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="62" font-weight="800" letter-spacing="-2">Vibe Bus</text>
+  <text x="74" y="220" fill="#B9C7D9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24">one party line for CLI agents</text>
+  <text x="602" y="220" fill="#83F7C6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24">MCP + CLI + Skill</text>
+</svg>
