@@ -11,13 +11,21 @@ if (!canvas) {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isMobile = window.matchMedia("(max-width: 640px)").matches;
 
+    const LAYOUT = {
+      spreadX: 1.88,
+      spreadY: 0.78,
+      cardSize: 0.64,
+      cameraZ: 8.8,
+      fov: 40,
+    };
+
     const AGENTS = [
-      { name: "Claude", color: 0x83f7c6, accent: "#83f7c6", pos: [-2.55, 1.0, 0], logo: "assets/logos/claude.svg" },
-      { name: "Codex", color: 0x62d6ff, accent: "#62d6ff", pos: [-2.55, 0, 0], logo: "assets/logos/codex.svg" },
-      { name: "Gemini", color: 0xffd166, accent: "#ffd166", pos: [-2.55, -1.0, 0], logo: "assets/logos/gemini.svg" },
-      { name: "Grok", color: 0xff6b6b, accent: "#ff6b6b", pos: [2.55, 1.0, 0], logo: "assets/logos/grok.svg" },
-      { name: "Cursor", color: 0xc084fc, accent: "#c084fc", pos: [2.55, 0, 0], logo: "assets/logos/cursor.svg" },
-      { name: "Antigravity", color: 0x94a3b8, accent: "#94a3b8", pos: [2.55, -1.0, 0], logo: "assets/logos/antigravity.png" },
+      { name: "Claude", color: 0x83f7c6, accent: "#83f7c6", pos: [-LAYOUT.spreadX, LAYOUT.spreadY, 0], logo: "assets/logos/claude.svg" },
+      { name: "Codex", color: 0x62d6ff, accent: "#62d6ff", pos: [-LAYOUT.spreadX, 0, 0], logo: "assets/logos/codex.svg" },
+      { name: "Gemini", color: 0xffd166, accent: "#ffd166", pos: [-LAYOUT.spreadX, -LAYOUT.spreadY, 0], logo: "assets/logos/gemini.svg" },
+      { name: "Grok", color: 0xff6b6b, accent: "#ff6b6b", pos: [LAYOUT.spreadX, LAYOUT.spreadY, 0], logo: "assets/logos/grok.svg" },
+      { name: "Cursor", color: 0xc084fc, accent: "#c084fc", pos: [LAYOUT.spreadX, 0, 0], logo: "assets/logos/cursor.svg" },
+      { name: "Antigravity", color: 0x94a3b8, accent: "#94a3b8", pos: [LAYOUT.spreadX, -LAYOUT.spreadY, 0], logo: "assets/logos/antigravity.png" },
     ];
 
     function roundRect(ctx, x, y, w, h, r) {
@@ -100,8 +108,8 @@ if (!canvas) {
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x070b14, 0.04);
 
-    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-    camera.position.set(0, 0, 7.8);
+    const camera = new THREE.PerspectiveCamera(LAYOUT.fov, 1, 0.1, 100);
+    camera.position.set(0, 0, LAYOUT.cameraZ);
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -172,7 +180,7 @@ if (!canvas) {
       const nodeGroup = new THREE.Group();
 
       const card = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.78, 0.78),
+        new THREE.PlaneGeometry(LAYOUT.cardSize, LAYOUT.cardSize),
         new THREE.MeshBasicMaterial({
           map: logoTextures[i],
           transparent: true,
@@ -239,9 +247,9 @@ if (!canvas) {
     const starCount = reducedMotion ? 60 : 100;
     const starPos = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount; i++) {
-      starPos[i * 3] = (Math.random() - 0.5) * 12;
-      starPos[i * 3 + 1] = (Math.random() - 0.5) * 7;
-      starPos[i * 3 + 2] = (Math.random() - 0.5) * 8 - 3;
+      starPos[i * 3] = (Math.random() - 0.5) * 8;
+      starPos[i * 3 + 1] = (Math.random() - 0.5) * 5;
+      starPos[i * 3 + 2] = (Math.random() - 0.5) * 6 - 2;
     }
     const stars = new THREE.Points(
       new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(starPos, 3)),
@@ -317,8 +325,8 @@ if (!canvas) {
         for (const nodeGroup of nodes) {
           const [bx, by, bz] = nodeGroup.userData.base;
           const phase = elapsed * 1.2 + bx;
-          nodeGroup.position.x = bx + Math.sin(phase) * 0.03;
-          nodeGroup.position.y = by + Math.cos(phase * 1.1) * 0.04;
+          nodeGroup.position.x = bx + Math.sin(phase) * 0.015;
+          nodeGroup.position.y = by + Math.cos(phase * 1.1) * 0.02;
           nodeGroup.position.z = bz;
         }
 
@@ -329,17 +337,17 @@ if (!canvas) {
           packet.position.copy(curve.getPoint(t));
         }
 
-        busGroup.rotation.y = Math.sin(elapsed * 0.12) * 0.08;
+        busGroup.rotation.y = Math.sin(elapsed * 0.12) * 0.04;
         stars.rotation.y += delta * 0.015;
       }
 
-      camera.position.x += (pointer.x * 0.35 - camera.position.x) * 0.04;
-      camera.position.y += (-pointer.y * 0.2 - camera.position.y) * 0.04;
-      camera.position.z = 7.8;
+      camera.position.x += (pointer.x * 0.15 - camera.position.x) * 0.04;
+      camera.position.y += (-pointer.y * 0.1 - camera.position.y) * 0.04;
+      camera.position.z = LAYOUT.cameraZ;
       camera.lookAt(0, 0, 0);
 
-      busGroup.rotation.x += (pointer.y * 0.05 - busGroup.rotation.x) * 0.03;
-      busGroup.rotation.z += (-pointer.x * 0.04 - busGroup.rotation.z) * 0.03;
+      busGroup.rotation.x += (pointer.y * 0.025 - busGroup.rotation.x) * 0.03;
+      busGroup.rotation.z += (-pointer.x * 0.02 - busGroup.rotation.z) * 0.03;
 
       if (composer) {
         composer.render();
