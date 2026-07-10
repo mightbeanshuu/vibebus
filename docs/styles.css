@@ -149,6 +149,17 @@ code {
   background: rgb(255 255 255 / 0.05);
 }
 
+.stars-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fbbf24 !important;
+}
+
+.stars-pill svg {
+  color: #fbbf24;
+}
+
 /* Hero */
 
 .hero {
@@ -267,6 +278,19 @@ h3 {
   background: rgb(255 255 255 / 0.05);
 }
 
+.btn-star {
+  border: 1px solid rgb(251 191 36 / 0.35);
+  background: rgb(251 191 36 / 0.08);
+  color: #fde68a;
+}
+
+.btn-star:hover {
+  border-color: rgb(251 191 36 / 0.6);
+  background: rgb(251 191 36 / 0.14);
+  box-shadow: 0 8px 28px rgb(251 191 36 / 0.12);
+  transform: translateY(-1px);
+}
+
 .agent-chips {
   display: flex;
   flex-wrap: wrap;
@@ -277,6 +301,9 @@ h3 {
 }
 
 .agent-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 6px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
@@ -285,6 +312,22 @@ h3 {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
+}
+
+.agent-chips img {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+
+.metrics span a {
+  color: var(--accent);
+}
+
+.metrics span a:hover {
+  text-decoration: underline;
 }
 
 /* Hero visual */
@@ -297,24 +340,111 @@ h3 {
   position: relative;
   aspect-ratio: 1 / 1;
   max-height: min(520px, 72vw);
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(165deg, var(--surface) 0%, var(--bg-elevated) 100%);
-  box-shadow: var(--shadow);
+  background: linear-gradient(165deg, #0c1220 0%, #060a12 100%);
+  box-shadow:
+    0 0 0 1px rgb(34 197 94 / 0.12),
+    0 24px 80px rgb(0 0 0 / 0.55),
+    0 0 120px rgb(34 197 94 / 0.08);
   overflow: hidden;
+  isolation: isolate;
+}
+
+.visual-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgb(131 247 198 / 0.55),
+    rgb(98 214 255 / 0.25) 35%,
+    rgb(255 209 102 / 0.2) 65%,
+    rgb(34 197 94 / 0.45)
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.visual-glow {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 30% 40%, rgb(34 197 94 / 0.18), transparent 42%),
+    radial-gradient(circle at 70% 60%, rgb(56 189 248 / 0.12), transparent 38%),
+    radial-gradient(circle at 50% 50%, rgb(255 209 102 / 0.06), transparent 50%);
+  animation: glow-drift 8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.visual-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0.04;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgb(255 255 255 / 0.5) 2px,
+    rgb(255 255 255 / 0.5) 3px
+  );
+  pointer-events: none;
+}
+
+.visual-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid rgb(34 197 94 / 0.3);
+  border-radius: 999px;
+  background: rgb(10 14 23 / 0.75);
+  backdrop-filter: blur(10px);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.visual-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: pulse 1.8s ease-in-out infinite;
 }
 
 #bus-canvas {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+@keyframes glow-drift {
+  from { transform: translate(-2%, -1%) scale(1); }
+  to { transform: translate(2%, 1%) scale(1.05); }
 }
 
 /* Metrics */
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   padding-bottom: clamp(48px, 6vw, 72px);
 }
@@ -575,7 +705,7 @@ h3 {
   }
 
   .metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .protocol-grid {

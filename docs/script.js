@@ -1,4 +1,27 @@
-// Nav scroll state
+// GitHub stars
+const STAR_REPO = "mightbeanshuu/vibebus";
+
+async function loadGitHubStars() {
+  const targets = document.querySelectorAll("[data-star-count]");
+  if (!targets.length) return;
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${STAR_REPO}`);
+    if (!response.ok) throw new Error("stars unavailable");
+    const data = await response.json();
+    const count = Number(data.stargazers_count ?? 0).toLocaleString();
+    for (const target of targets) {
+      target.textContent = count;
+    }
+  } catch {
+    for (const target of targets) {
+      target.textContent = "0";
+    }
+  }
+}
+
+loadGitHubStars();
+
 const nav = document.querySelector("[data-nav]");
 if (nav) {
   const onScroll = () => {
