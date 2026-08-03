@@ -1,7 +1,7 @@
 {
   "name": "vibebus",
-  "version": "1.0.0",
-  "description": "A local MCP party line, skill, and task bus for CLI coding agents.",
+  "version": "2.0.0",
+  "description": "A real-time, bidirectional MCP bus that lets CLI coding agents message, wake, question, and coordinate with each other.",
   "type": "module",
   "bin": {
     "vibebus-mcp": "./bin/vibebus-mcp.js",
@@ -10,7 +10,7 @@
     "cli-team": "./bin/vibebus.js"
   },
   "scripts": {
-    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/mcp-features.js && node --check src/store.js && node --check src/tools.js && node --check skills/vibebus/scripts/register-session.js",
+    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/mcp-features.js && node --check src/store.js && node --check src/tools.js && node --check src/shared.js && node --check src/events.js && node --check src/watcher.js && node --check src/presence.js && node --check src/agents.js && node --check src/messaging.js && node --check src/tasks.js && node --check src/asks.js && node --check src/errors.js && node --check src/session.js && node --check src/pump.js && node --check src/dashboard.js && node --check skills/vibebus/scripts/register-session.js",
     "test": "node --test"
   },
   "keywords": [
@@ -28,7 +28,14 @@
     "aider",
     "goose",
     "handoff",
-    "skill"
+    "skill",
+    "realtime",
+    "bidirectional",
+    "sampling",
+    "elicitation",
+    "multi-agent",
+    "orchestration",
+    "wake"
   ],
   "author": "Anshu <amananshu2004@gmail.com>",
   "license": "MIT",

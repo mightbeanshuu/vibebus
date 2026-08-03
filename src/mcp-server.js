@@ -1,48 +1,100 @@
-import { createStore } from "./store.js";
+import { BusError } from "./errors.js";
 import { getPrompt, listResources, PROMPTS, readResource } from "./mcp-features.js";
+import { startPump } from "./pump.js";
+import { createNullSession, createSession } from "./session.js";
+import { createStore } from "./store.js";
 import { callTool, TOOL_DEFINITIONS } from "./tools.js";
 
 const SERVER_INFO = {
   name: "vibebus",
-  version: "1.0.0",
+  version: "2.0.0",
 };
+
+const INSTRUCTIONS = [
+  "Vibe Bus is a shared, real-time coordination bus for every AI coding agent running on this machine.",
+  "",
+  "Start every session with register_agent — that binds this MCP connection to your agent id and is what lets",
+  "other agents wake, ask, and ping you. Then read team_status and read_inbox.",
+  "",
+  "Key habits:",
+  "- Before editing files, take a lease on them so no other agent edits the same paths.",
+  "- Use ask_agent when you need an answer from another agent; it blocks and raises no_reply if nobody answers.",
+  "- Use wake_agent to rouse an idle, sleeping, or exited agent; it escalates until something reaches it.",
+  "- Use sleep_agent instead of polling when you have nothing to do; you will be woken within milliseconds.",
+  "- Record durable choices with record_decision and shared facts with context.",
+].join("\n");
 
 export async function runMcpServer(io) {
   const store = createStore({ env: io.env });
+  const session = createSession({
+    send: (message) => write(io.stdout, message, framing.enabled),
+    log: (text) => io.stderr?.write?.(`[vibebus] ${text}\n`),
+  });
+
+  const framing = { enabled: false };
+  let pump = null;
   let buffer = "";
 
-  for await (const chunk of io.stdin) {
-    buffer += chunk.toString("utf8");
-    buffer = await drainBuffer(buffer, async ({ request, framed }) => {
-      const response = await handleRequest(store, request).catch((error) =>
-        errorResponse(request?.id ?? null, -32603, error.message),
+  const onError = (error) => io.stderr?.write?.(`[vibebus] ${error.stack ?? error.message}\n`);
+
+  try {
+    for await (const chunk of io.stdin) {
+      buffer += chunk.toString("utf8");
+      buffer = await drainBuffer(
+        buffer,
+        async ({ request, framed }) => {
+          framing.enabled = framed;
+
+          // Responses to our own outbound sampling/elicitation requests.
+          if (request && request.method === undefined && request.id !== undefined) {
+            session.handleResponse(request);
+            return;
+          }
+
+          const response = await handleRequest(store, request, session, io.env).catch((error) =>
+            errorResponse(request?.id ?? null, -32603, error.message),
+          );
+
+          if (request?.method === "initialize" && !pump) {
+            pump = startPump({ store, session, env: io.env, onError });
+          }
+
+          if (response) {
+            write(io.stdout, response, framed);
+          }
+        },
+        io.stdout,
       );
-      if (response) {
-        write(io.stdout, response, framed);
-      }
-    }, io.stdout);
+    }
+  } finally {
+    pump?.stop();
+    store.close();
   }
 }
 
-export async function handleRequest(store, request) {
+export async function handleRequest(store, request, session = createNullSession(), env = process.env) {
   if (!request || request.jsonrpc !== "2.0") {
     return errorResponse(request?.id ?? null, -32600, "Invalid JSON-RPC request");
   }
 
-  if (request.method === "notifications/initialized") {
+  if (request.method === "notifications/initialized" || request.method === "notifications/cancelled") {
     return null;
   }
 
   if (request.method === "initialize") {
+    session.initialize(request.params ?? {});
+
     return resultResponse(request.id, {
       protocolVersion: request.params?.protocolVersion ?? "2024-11-05",
       capabilities: {
-        tools: {},
-        resources: {},
-        prompts: {},
+        tools: { listChanged: false },
+        // subscribe:true is what turns this server from pull-only into push.
+        resources: { subscribe: true, listChanged: true },
+        prompts: { listChanged: false },
+        logging: {},
       },
       serverInfo: SERVER_INFO,
-      instructions: "Use Vibe Bus to register agents, exchange threaded messages, acknowledge handoffs, and coordinate shared tasks.",
+      instructions: INSTRUCTIONS,
     });
   }
 
@@ -57,17 +109,31 @@ export async function handleRequest(store, request) {
   if (request.method === "tools/call") {
     const name = request.params?.name;
     const args = request.params?.arguments ?? {};
-    const output = await callTool(store, name, args);
-    return resultResponse(request.id, {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(output, null, 2),
-        },
-      ],
-      structuredContent: output,
-      isError: false,
-    });
+
+    session.beginCall(request);
+    try {
+      const output = await callTool(store, name, args, { session, env });
+      return resultResponse(request.id, {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output,
+        isError: false,
+      });
+    } catch (error) {
+      // A coordination bus that swallows failures is worse than no bus, so
+      // failures come back as structured, actionable tool errors.
+      const payload =
+        error instanceof BusError
+          ? error.toJSON()
+          : { ok: false, error: { code: "internal", status: 500, message: error.message, hint: null, details: {} } };
+
+      return resultResponse(request.id, {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        structuredContent: payload,
+        isError: true,
+      });
+    } finally {
+      session.endCall();
+    }
   }
 
   if (request.method === "resources/list") {
@@ -76,6 +142,20 @@ export async function handleRequest(store, request) {
 
   if (request.method === "resources/read") {
     return resultResponse(request.id, readResource(store, request.params?.uri));
+  }
+
+  if (request.method === "resources/subscribe") {
+    session.subscribe(request.params?.uri);
+    return resultResponse(request.id, {});
+  }
+
+  if (request.method === "resources/unsubscribe") {
+    session.unsubscribe(request.params?.uri);
+    return resultResponse(request.id, {});
+  }
+
+  if (request.method === "logging/setLevel") {
+    return resultResponse(request.id, { level: session.setLogLevel(request.params?.level) });
   }
 
   if (request.method === "prompts/list") {
