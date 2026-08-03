@@ -34,6 +34,9 @@ export const EVENT_TYPES = [
   "channel.joined",
   "channel.left",
   "wake",
+  "wake.blocked",
+  "artifact.put",
+  "artifact.deleted",
   "bus.compacted",
 ];
 

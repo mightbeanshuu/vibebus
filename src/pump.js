@@ -4,6 +4,7 @@ import { claimWakeTier, recordWakeDelivery } from "./agents.js";
 import { eventsSince, eventVisibleTo, resourcesTouchedBy } from "./events.js";
 import { replyToAsk, resolveApproval } from "./asks.js";
 import { presenceOf } from "./presence.js";
+import { buildWakePrompt, canType, typeIntoTerminal } from "./terminal.js";
 import { timestamp } from "./shared.js";
 
 const SESSION_HEARTBEAT_MS = 30_000;
@@ -209,12 +210,12 @@ export function startPump({ store, session, env = process.env, onError } = {}) {
         }
       }
 
-      if (wake.tiers.includes("tmux") && !once(`wake:tmux:${wake.id}`)) {
+      if (wake.tiers.includes("terminal") && !once(`wake:terminal:${wake.id}`)) {
         const target = state.agents[agentId];
-        if (target?.tmux_target && env.VIBEBUS_TMUX !== "0") {
-          const claim = claimWakeTier(store, { wake_id: wake.id, tier: "tmux", by: `${agentId}:${process.pid}` });
+        if (canType(target) && env.VIBEBUS_TERMINAL !== "0") {
+          const claim = claimWakeTier(store, { wake_id: wake.id, tier: "terminal", by: `${agentId}:${process.pid}` });
           if (claim.ok) {
-            wakeViaTmux(wake, agentId, target.tmux_target);
+            wakeViaTerminal(wake, agentId, target, state);
           }
         }
       }
@@ -263,35 +264,41 @@ export function startPump({ store, session, env = process.env, onError } = {}) {
   }
 
   /**
-   * Type the wake straight into the agent's own interactive pane.
+   * Type the wake straight into the agent's own prompt.
    *
-   * This is the only tier that makes an idle interactive CLI resume its real
-   * session rather than answering in a side channel, and unlike MCP sampling it
-   * works with every client. Literal mode plus a separate Enter keystroke keeps
-   * the shell from interpreting anything in the text.
+   * This is the tier that actually resumes an idle interactive agent: the text
+   * lands in its input box and is submitted, exactly as if the human had pasted
+   * it. Works across tmux, Terminal.app, and iTerm2, so it does not depend on
+   * the client implementing MCP sampling.
    */
-  function wakeViaTmux(wake, agentId, target) {
-    const text =
-      `Vibe Bus wake from ${wake.from} (${wake.urgency}): ${wake.reason} ` +
-      `— read_inbox as ${agentId}, then ack_message.`;
+  function wakeViaTerminal(wake, agentId, target, state) {
+    // If the wake came from a blocked question, hand over the ask id so the
+    // agent can answer it directly instead of hunting through its inbox.
+    const ask = (state.asks ?? []).find(
+      (item) => item.to === agentId && item.status === "pending" && item.mode !== "ping",
+    );
 
-    try {
-      const literal = spawn("tmux", ["send-keys", "-t", target, "-l", text], { stdio: "ignore" });
-      literal.on("error", (error) => {
-        session.notifyLog("warning", { event: "wake.tmux_failed", wake_id: wake.id, error: error.message });
+    const prompt = buildWakePrompt({
+      agentId,
+      from: wake.from,
+      reason: wake.reason,
+      urgency: wake.urgency,
+      askId: ask?.id ?? null,
+    });
+
+    typeIntoTerminal(target.terminal ?? { kind: "tmux", pane: target.tmux_target }, prompt, (result) => {
+      if (!result.ok) {
+        session.notifyLog("warning", { event: "wake.terminal_failed", wake_id: wake.id, error: result.error });
+        return;
+      }
+      recordWakeDelivery(store, {
+        wake_id: wake.id,
+        tier: "terminal",
+        by: agentId,
+        detail: `${result.method}:${result.target}`,
       });
-      literal.on("exit", (code) => {
-        if (code !== 0) {
-          session.notifyLog("warning", { event: "wake.tmux_failed", wake_id: wake.id, exit_code: code });
-          return;
-        }
-        spawn("tmux", ["send-keys", "-t", target, "Enter"], { stdio: "ignore" });
-        recordWakeDelivery(store, { wake_id: wake.id, tier: "tmux", by: agentId, detail: target });
-        session.notifyLog("notice", { event: "wake.tmux_sent", wake_id: wake.id, pane: target });
-      });
-    } catch (error) {
-      session.notifyLog("warning", { event: "wake.tmux_failed", wake_id: wake.id, error: error.message });
-    }
+      session.notifyLog("notice", { event: "wake.terminal_typed", wake_id: wake.id, method: result.method });
+    });
   }
 
   async function wakeHuman(wake, agentId) {

@@ -14,13 +14,25 @@ export const PRESENCE_TTL = {
 /**
  * Escalation order, cheapest and least intrusive first.
  *
- * `model` runs a side-channel completion in the target's client; `tmux` types
- * into the target's real interactive session, which is the only tier that makes
- * an idle CLI agent actually resume its own work. In practice tmux and process
- * are the tiers that work everywhere, because MCP sampling and elicitation are
- * still unevenly supported across clients.
+ * `model` runs a side-channel completion in the target's client; `terminal`
+ * types into the target's real interactive session, which is the only tier that
+ * makes an idle CLI agent actually resume its own work. In practice terminal and
+ * process are the tiers that work everywhere, because MCP sampling and
+ * elicitation are still unevenly supported across clients.
  */
-export const WAKE_TIERS = ["bus", "session", "model", "tmux", "human", "process"];
+export const WAKE_TIERS = ["bus", "session", "model", "terminal", "human", "process"];
+
+/** True when the bus knows a terminal it can type a wake into. */
+export function canTypeTo(agent) {
+  const terminal = agent?.terminal;
+  if (!terminal) {
+    return Boolean(agent?.tmux_target);
+  }
+  if (terminal.kind === "tmux") {
+    return Boolean(terminal.pane);
+  }
+  return (terminal.kind === "apple_terminal" || terminal.kind === "iterm2") && Boolean(terminal.tty);
+}
 
 export function presenceOf(agent, now = Date.now()) {
   if (!agent) {
@@ -80,7 +92,7 @@ function reachabilityOf(agent, presence, now = Date.now()) {
     bus: true,
     session: live,
     model: Boolean(supports.sampling) && live,
-    tmux: Boolean(agent.tmux_target),
+    terminal: canTypeTo(agent),
     human: Boolean(supports.elicitation) && live,
     process: Boolean(agent.wake_command),
   };
@@ -114,7 +126,7 @@ export function planWake(agent, { urgency = "normal", max_tier = "process" } = {
     wanted.push("model");
     // Typing into the target's own session is what actually makes an idle
     // interactive agent pick the work back up.
-    wanted.push("tmux");
+    wanted.push("terminal");
   }
 
   if (urgency === "urgent" || presence === "stale" || presence === "offline") {

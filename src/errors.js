@@ -42,9 +42,12 @@ export const ERROR_CODES = {
   timeout: 504,
   ask_declined: 409,
   lease_conflict: 409,
+  deadlock: 409,
+  stale_read: 409,
   context_conflict: 409,
   task_conflict: 409,
   agent_unreachable: 503,
+  wake_throttled: 429,
   no_session: 503,
   unsupported: 501,
 };

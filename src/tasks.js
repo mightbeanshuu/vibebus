@@ -1,10 +1,11 @@
 import { maybeAutoWake } from "./agents.js";
 import { busError, requireAgent } from "./errors.js";
 import { emit } from "./events.js";
+import { releaseLeasesForTask } from "./leases.js";
 import { emitMessage, makeMessage } from "./messaging.js";
 import { describeAgent } from "./presence.js";
 import { nextId } from "./store.js";
-import { clampMs, normalizeLimit, note, requireRecipient, requireString, timestamp, touchAgent } from "./shared.js";
+import { normalizeLimit, note, requireRecipient, requireString, timestamp, touchAgent } from "./shared.js";
 
 const TERMINAL = ["done", "cancelled"];
 
@@ -47,6 +48,8 @@ export function createTask(store, input) {
           priority: task.priority,
           reason: `assigned task ${task.id}: ${task.title}`,
           trigger: "create_task",
+          kind: "task",
+          payload: { task: { id: task.id, title: task.title, description: task.description, files: task.files } },
         })
       : [];
 
@@ -112,6 +115,10 @@ export function handoffTask(store, input) {
       priority: task.priority === "normal" ? "high" : task.priority,
       reason: `handoff ${task.id}: ${task.title}`,
       trigger: "handoff_task",
+      // kind:"task" makes the wake arrive as a complete assignment the agent can
+      // start from, instead of a notification it has to go look up.
+      kind: "task",
+      payload: { task: { id: task.id, title: task.title, description: task.description, files: task.files } },
     });
 
     return {
@@ -193,7 +200,9 @@ export function updateTask(store, input) {
       data: { from: before, to: task.status, note: input.note ?? null, assignee: task.assignee },
     });
 
-    const unblocked = TERMINAL.includes(task.status) && !TERMINAL.includes(before) ? unblockDependents(state, task) : [];
+    const finished = TERMINAL.includes(task.status) && !TERMINAL.includes(before);
+    const unblocked = finished ? unblockDependents(state, task) : [];
+    const releasedLeases = finished ? releaseLeasesForTask(state, task.id, input.agent_id) : [];
     touchAgent(state, input.agent_id);
 
     const woke = [];
@@ -209,7 +218,7 @@ export function updateTask(store, input) {
       );
     }
 
-    return { ok: true, task, unblocked, woke, bus_seq: state.seq };
+    return { ok: true, task, unblocked, released_leases: releasedLeases, woke, bus_seq: state.seq };
   });
 }
 
@@ -275,93 +284,6 @@ export function recordDecision(store, input) {
 
     touchAgent(state, input.from);
     return { ok: true, decision, bus_seq: state.seq };
-  });
-}
-
-/**
- * Advisory file leases.
- *
- * Two agents editing the same file is the single most common way a multi-agent
- * session destroys its own work. A lease is a short, expiring claim other
- * agents can see before they start writing.
- */
-export function lease(store, input) {
-  requireString(input, "action");
-
-  if (input.action === "list") {
-    const state = store.read();
-    return { ok: true, leases: state.leases, bus_seq: state.seq };
-  }
-
-  requireString(input, "agent_id");
-
-  if (input.action === "acquire") {
-    const paths = normalizePaths(input.paths);
-    if (paths.length === 0) {
-      throw busError("invalid_request", "paths is required to acquire a lease.");
-    }
-    const ttlMs = clampMs(input.ttl_ms, 15 * 60_000, 10_000, 4 * 60 * 60_000);
-
-    return store.update((state) => {
-      const conflicts = [];
-      for (const held of state.leases) {
-        if (held.agent_id === input.agent_id) {
-          continue;
-        }
-        const overlap = held.paths.filter((heldPath) => paths.some((path) => pathsOverlap(path, heldPath)));
-        if (overlap.length > 0) {
-          conflicts.push({ lease_id: held.id, agent_id: held.agent_id, paths: overlap, expires_at: held.expires_at });
-        }
-      }
-
-      if (conflicts.length > 0) {
-        throw busError("lease_conflict", `Those paths are already leased by ${conflicts.map((c) => c.agent_id).join(", ")}.`, {
-          hint: "Wait for the lease to expire, work on different files, or message the holder to release it.",
-          details: { requested: paths, conflicts },
-        });
-      }
-
-      const record = {
-        id: nextId(state, "lease"),
-        agent_id: input.agent_id,
-        paths,
-        reason: input.reason ?? null,
-        task_id: input.task_id ?? null,
-        acquired_at: timestamp(),
-        expires_at: new Date(Date.now() + ttlMs).toISOString(),
-      };
-      state.leases.push(record);
-
-      emit(state, "lease.acquired", {
-        actor: input.agent_id,
-        ref: record.id,
-        data: { paths, reason: record.reason, expires_at: record.expires_at },
-      });
-
-      touchAgent(state, input.agent_id);
-      return { ok: true, lease: record, bus_seq: state.seq };
-    });
-  }
-
-  if (input.action === "release") {
-    return store.update((state) => {
-      const before = state.leases.length;
-      const released = state.leases.filter(
-        (item) => item.agent_id === input.agent_id && (!input.lease_id || item.id === input.lease_id),
-      );
-      state.leases = state.leases.filter((item) => !released.includes(item));
-
-      for (const item of released) {
-        emit(state, "lease.released", { actor: input.agent_id, ref: item.id, data: { paths: item.paths } });
-      }
-
-      touchAgent(state, input.agent_id);
-      return { ok: true, released: released.map((item) => item.id), remaining: state.leases.length, was: before, bus_seq: state.seq };
-    });
-  }
-
-  throw busError("invalid_request", `Unknown lease action: ${input.action}`, {
-    hint: "Use acquire, release, or list.",
   });
 }
 
@@ -491,11 +413,3 @@ function isFinished(state, taskId) {
   return !task || TERMINAL.includes(task.status);
 }
 
-function normalizePaths(paths) {
-  const list = Array.isArray(paths) ? paths : paths ? [paths] : [];
-  return [...new Set(list.map((path) => String(path).trim().replace(/\/+$/, "")).filter(Boolean))];
-}
-
-function pathsOverlap(left, right) {
-  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
-}

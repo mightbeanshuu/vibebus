@@ -1,6 +1,8 @@
+import { busError } from "./errors.js";
 import { emit } from "./events.js";
 import { planWake, presenceOf, describeAgent } from "./presence.js";
 import { nextId } from "./store.js";
+import { detectTerminal } from "./terminal.js";
 import {
   clampMs,
   ensureAgent,
@@ -42,10 +44,11 @@ export function registerAgent(store, input, ctx = {}) {
       status: existing.status ?? "registered",
       note: existing.note ?? "",
       wake_command: input.wake_command ?? existing.wake_command ?? headlessCommandFor(input.cli ?? existing.cli),
-      // The MCP server inherits its CLI's environment, so TMUX_PANE points at
-      // the pane the agent is actually running in. Registering it is what
-      // consents to being woken by keystroke injection.
-      tmux_target: input.tmux_target ?? existing.tmux_target ?? detectTmuxTarget(ctx.env),
+      // The MCP server inherits its CLI's environment and is a child of the CLI
+      // process, so we can work out which terminal pane the agent is sitting in.
+      // Registering it is what consents to being woken by having a prompt typed
+      // into that pane.
+      terminal: resolveTerminal(input, existing, ctx.env),
       auto_wake: input.auto_wake ?? existing.auto_wake ?? true,
       sleep_until: null,
       registered_at: existing.registered_at ?? now,
@@ -236,7 +239,16 @@ export async function wakeAgent(store, input, ctx = {}) {
       presence,
       payload: input.payload ?? null,
       trigger: "wake_agent",
+      kind: input.kind ?? "message",
+      env: ctx.env,
     });
+
+    if (!wake) {
+      throw busError("wake_throttled", `Wake to ${input.to} was blocked by the wake guard.`, {
+        hint: "Too many wakes this hour, or this would bounce a wake straight back. Raise VIBEBUS_MAX_WAKES_PER_HOUR if this is deliberate.",
+        details: guardWake(state, { from: input.from, to: input.to, trigger: "auto", env: ctx.env }),
+      });
+    }
 
     // A woken agent needs to know why, so the wake carries a real inbox message.
     const message = {
@@ -306,7 +318,7 @@ export async function wakeAgent(store, input, ctx = {}) {
  * This is what makes "hand off a task and the other agent just starts" work
  * without anyone remembering to call wake_agent.
  */
-export function maybeAutoWake(state, { from, to, priority = "normal", reason, trigger }) {
+export function maybeAutoWake(state, { from, to, priority = "normal", reason, trigger, kind = "message", payload = null, env }) {
   const recipients = (Array.isArray(to) ? to : [to]).filter((id) => id && id !== "*" && id !== from);
   const woken = [];
 
@@ -327,7 +339,10 @@ export function maybeAutoWake(state, { from, to, priority = "normal", reason, tr
 
     const urgency = priority === "urgent" ? "urgent" : priority === "high" ? "high" : "normal";
     const { plan } = planWake(agent, { urgency });
-    woken.push(createWake(state, { from, to: agentId, reason, urgency, plan, presence, trigger }));
+    const wake = createWake(state, { from, to: agentId, reason, urgency, plan, presence, trigger, kind, payload, env });
+    if (wake) {
+      woken.push(wake);
+    }
   }
 
   return woken;
@@ -359,9 +374,57 @@ export function acknowledgeWake(store, input) {
   });
 }
 
-export function createWake(state, { from, to, reason, urgency = "normal", plan = ["bus"], presence, payload = null, trigger }) {
+const WAKE_BUDGET_WINDOW_MS = 60 * 60_000;
+const DEFAULT_WAKE_BUDGET = 120;
+const LOOP_WINDOW_MS = 120_000;
+
+/**
+ * Wakes are the one primitive that can cost real money without a human in the
+ * loop: a wake can start a model turn, and that turn can wake someone else.
+ * Two agents nudging each other overnight is the failure mode that matters, so
+ * every wake passes a cycle check and an hourly budget first.
+ */
+export function guardWake(state, { from, to, trigger, env = process.env }) {
+  const now = Date.now();
+  const recent = (state.wakes ?? []).filter((wake) => now - Date.parse(wake.created_at ?? 0) < WAKE_BUDGET_WINDOW_MS);
+
+  const budget = Number.parseInt(env.VIBEBUS_MAX_WAKES_PER_HOUR ?? "", 10) || DEFAULT_WAKE_BUDGET;
+  if (recent.length >= budget) {
+    return { allowed: false, reason: "budget", detail: `${recent.length} wakes in the last hour, cap is ${budget}.` };
+  }
+
+  // Automatic wakes must not ping-pong. A manual wake_agent call is a human
+  // decision and is only budget-capped, never loop-blocked.
+  if (trigger && trigger !== "wake_agent") {
+    const reciprocal = recent.find(
+      (wake) => wake.from === to && wake.to === from && now - Date.parse(wake.created_at ?? 0) < LOOP_WINDOW_MS,
+    );
+    if (reciprocal) {
+      return {
+        allowed: false,
+        reason: "loop",
+        detail: `${to} woke ${from} ${Math.round((now - Date.parse(reciprocal.created_at)) / 1000)}s ago; refusing to bounce it back.`,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+export function createWake(state, { from, to, reason, urgency = "normal", plan = ["bus"], presence, payload = null, trigger, kind = "message", env }) {
   const target = ensureAgent(state, to);
   const ttlMs = urgency === "urgent" ? 15 * 60_000 : 60 * 60_000;
+
+  const guard = guardWake(state, { from, to, trigger, env });
+  if (!guard.allowed) {
+    emit(state, "wake.blocked", {
+      actor: from,
+      audience: [from, to],
+      ref: to,
+      data: { reason: guard.reason, detail: guard.detail, trigger },
+    });
+    return null;
+  }
 
   const wake = {
     id: nextId(state, "wake"),
@@ -370,6 +433,7 @@ export function createWake(state, { from, to, reason, urgency = "normal", plan =
     reason: reason ?? "wake requested",
     urgency,
     trigger: trigger ?? "manual",
+    kind,
     presence_at_request: presence ?? presenceOf(target),
     tiers: plan,
     delivered: [],
@@ -467,11 +531,14 @@ function passesWakeFilter(wakeOn, { priority, from, topic }) {
   return true;
 }
 
-function detectTmuxTarget(env = process.env) {
-  if (env?.VIBEBUS_TMUX === "0") {
-    return null;
+function resolveTerminal(input, existing, env) {
+  if (input.terminal) {
+    return input.terminal;
   }
-  return env?.TMUX_PANE ?? null;
+  if (input.tmux_target) {
+    return { kind: "tmux", pane: input.tmux_target };
+  }
+  return detectTerminal(env) ?? existing.terminal ?? null;
 }
 
 function describePlan(plan, presence) {

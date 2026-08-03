@@ -23,6 +23,8 @@ const DEFAULT_STATE = {
   wakes: [],
   flows: {},
   flow_runs: [],
+  lease_queue: [],
+  artifacts: {},
   channels: {},
   context: {},
   swept_at: null,
@@ -392,6 +394,8 @@ function normalizeState(state) {
     wakes: state.wakes ?? [],
     flows: state.flows ?? {},
     flow_runs: state.flow_runs ?? [],
+    lease_queue: state.lease_queue ?? [],
+    artifacts: state.artifacts ?? {},
     channels: state.channels ?? {},
     context: state.context ?? {},
   };

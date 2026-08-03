@@ -1,6 +1,6 @@
 {
   "name": "vibebus",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A real-time, bidirectional MCP bus that lets CLI coding agents message, wake, question, and coordinate with each other.",
   "type": "module",
   "bin": {

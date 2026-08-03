@@ -22,12 +22,13 @@ import {
   runDebate2,
   startFlow,
 } from "./flows.js";
+import { artifact } from "./artifacts.js";
+import { lease } from "./leases.js";
 import {
   claimTask,
   context,
   createTask,
   handoffTask,
-  lease,
   listTasks,
   recordDecision,
   teamStatus,
@@ -69,7 +70,7 @@ export const TOOL_DEFINITIONS = [
         workspace: stringProp("Current workspace path.", false),
         capabilities: arrayProp("Short capability labels.", false),
         wake_command: stringProp("Shell command that relaunches this agent headlessly if it exits, e.g. 'claude -p \"check vibebus\"'. Used only by the process wake tier.", false),
-        tmux_target: stringProp("tmux pane to type wakes into, e.g. '%3' or 'vibe:0.1'. Auto-detected from TMUX_PANE when running inside tmux; set VIBEBUS_TMUX=0 to opt out.", false),
+        tmux_target: stringProp("Override the tmux pane to type wakes into, e.g. '%3'. Normally auto-detected — the bus works out your terminal (tmux, Terminal.app, or iTerm2) at registration so teammates can wake you by typing into your prompt. Set VIBEBUS_TERMINAL=0 to opt out.", false),
         auto_wake: booleanProp("Allow the bus to wake this agent automatically when work arrives. Default true."),
       },
       ["agent_id"],
@@ -304,7 +305,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "wake_agent",
     description:
-      "Wake a sleeping, idle, or offline agent. Escalates bus -> session push -> its model (MCP sampling) -> its human (MCP elicitation) -> relaunching its process, stopping at the first tier that can reach it.",
+      "Wake a sleeping, idle, or offline agent. Escalates bus -> session push -> its model (MCP sampling) -> typing a prompt straight into its terminal -> its human (MCP elicitation) -> relaunching its process, stopping at the first tier that can reach it.",
     inputSchema: objectSchema(
       {
         from: stringProp("Waking agent id."),
@@ -312,7 +313,7 @@ export const TOOL_DEFINITIONS = [
         reason: stringProp("Why it is being woken. This becomes the message it reads on waking.", false),
         urgency: enumProp(PRIORITY, "Higher urgency climbs the ladder faster. Default normal."),
         max_tier: enumProp(
-          ["bus", "session", "model", "tmux", "human", "process"],
+          ["bus", "session", "model", "terminal", "human", "process"],
           "Do not escalate past this tier. Default process. Relaunching a process additionally requires VIBEBUS_ALLOW_SPAWN=1.",
         ),
         task_id: stringProp("Task this wake relates to.", false),
@@ -441,16 +442,41 @@ export const TOOL_DEFINITIONS = [
   {
     name: "lease",
     description:
-      "Claim files before editing them so two agents never write the same path at once. Leases expire on their own; conflicts raise lease_conflict naming the holder.",
+      "Claim files before touching them so two agents never write the same path at once. Read leases share; write leases are exclusive. Pass wait_ms to queue instead of failing — the bus detects deadlocks rather than letting you both time out.",
     inputSchema: objectSchema(
       {
-        action: enumProp(["acquire", "release", "list"], "Lease action."),
+        action: enumProp(["acquire", "release", "renew", "verify", "list"], "Lease action."),
         agent_id: stringProp("Agent holding or releasing the lease.", false),
         paths: arrayProp("File or directory paths to claim.", false),
+        mode: enumProp(["write", "read"], "write is exclusive, read shares with other readers. Default write."),
         reason: stringProp("What you are about to do to them.", false),
-        task_id: stringProp("Related task id.", false),
-        lease_id: stringProp("Specific lease to release. Omit to release all of this agent's leases.", false),
+        task_id: stringProp("Related task id. Leases are released automatically when the task finishes.", false),
+        lease_id: stringProp("Specific lease to act on. Omit to affect all of this agent's leases.", false),
+        wait_ms: numberProp("Queue for the paths for up to this long instead of failing immediately."),
+        guard: booleanProp("Record content hashes so verify can detect anyone editing these paths behind your back."),
         ttl_ms: numberProp("Lease lifetime in ms (default 900000, max 4h)."),
+        soft_fail: booleanProp("For verify: report drift instead of raising."),
+      },
+      ["action"],
+    ),
+  },
+  {
+    name: "artifact",
+    description:
+      "Shared work cache. Store research, plans, findings, and generated output under a key so other agents read it instead of redoing the work. Call list before starting anything expensive.",
+    inputSchema: objectSchema(
+      {
+        action: enumProp(["put", "get", "list", "delete"], "Artifact action."),
+        agent_id: stringProp("Agent storing or removing the artifact.", false),
+        key: stringProp("Namespaced key, for example task_000015/dashboard-research.", false),
+        content: stringProp("The full text to store. Required for put.", false),
+        summary: stringProp("One line describing what this is, shown in list.", false),
+        kind: stringProp("research, plan, findings, output, note.", false),
+        task_id: stringProp("Task this belongs to.", false),
+        tags: arrayProp("Tags for filtering.", false),
+        prefix: stringProp("For list: only keys starting with this.", false),
+        tag: stringProp("For list: only artifacts with this tag.", false),
+        limit: numberProp("For list: maximum entries."),
       },
       ["action"],
     ),
@@ -548,7 +574,7 @@ export const TOOL_DEFINITIONS = [
         flow_id: stringProp("Defined flow to run.", false),
         root: objectProp("Inline root step, for a one-off flow with no define_flow round trip."),
         inputs: objectProp("Values referenced by ${inputs.x} in the flow."),
-        max_wake_tier: enumProp(["bus", "session", "model", "tmux", "human", "process"], "How hard the flow may escalate to reach a missing role."),
+        max_wake_tier: enumProp(["bus", "session", "model", "terminal", "human", "process"], "How hard the flow may escalate to reach a missing role."),
       },
       ["from"],
     ),
@@ -646,6 +672,7 @@ const HANDLERS = {
   claim_task: claimTask,
   update_task: updateTask,
   lease,
+  artifact,
   context,
   record_decision: recordDecision,
   team_status: teamStatus,
