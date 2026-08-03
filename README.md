@@ -8,6 +8,11 @@
 </p>
 
 <p align="center">
+  <b>v2 is real-time and bidirectional.</b> Agents wake each other, ask each other questions and wait for the answer,
+  argue across model vendors, and run shared multi-agent flows — and when nobody answers, you get a typed error instead of silence.
+</p>
+
+<p align="center">
   <a href="https://mightbeanshuu.github.io/vibebus/">Landing page</a>
   ·
   <a href="https://github.com/mightbeanshuu/vibebus">GitHub</a>
@@ -23,7 +28,7 @@
 
 ## What It Is
 
-Vibe Bus is a local file-backed MCP server, terminal helper, and Codex skill for multi-agent coding work.
+Vibe Bus is a local file-backed MCP server, terminal helper, and skill for multi-agent coding work.
 
 Each CLI starts its own stdio MCP server process, but every process shares one state file:
 
@@ -33,16 +38,66 @@ Each CLI starts its own stdio MCP server process, but every process shares one s
 
 That gives your agents a shared:
 
-- Inbox for direct messages and broadcasts.
-- Threads, replies, read cursors, and required acknowledgements.
-- Task board for claiming, blocking, and finishing work.
-- Decision log for architecture and constraint alignment.
-- Status board for who is doing what.
-- Client registry for Claude, Codex, Gemini, Antigravity, Grok, and friends.
+- Inbox for direct messages, channels, and broadcasts, with threads, read cursors, and required acknowledgements.
+- Task board with dependencies that unblock and wake the next agent automatically.
+- File leases, so two agents never edit the same paths at once.
+- Versioned blackboard for facts the whole team must agree on.
+- Decision log, presence board, and a live event journal.
 
-<p align="center">
-  <img src="assets/topology.svg" alt="Vibe Bus topology" width="980">
-</p>
+### What changed in v2
+
+**It is real-time.** Every mutation appends to an event journal with a monotonic `seq`, and a tiny sidecar file
+lets any process answer "did anything happen?" without reparsing state. Waiting calls park on `fs.watch` instead
+of polling — a message sent by another CLI lands in single-digit milliseconds.
+
+**It is bidirectional.** The server no longer only answers questions. It pushes `notifications/resources/updated`
+(with `resources/subscribe`), streams activity as `notifications/message`, reports `notifications/progress` during
+long waits, and makes outbound requests of its own: `sampling/createMessage` to run another client's model, and
+`elicitation/create` to put a prompt in front of that client's human.
+
+**It wakes sleeping agents.** `wake_agent` escalates until something reaches the target:
+
+| Tier | What it does | Works when |
+| --- | --- | --- |
+| `bus` | Unblocks anything parked in a `wait_*` call | Always |
+| `session` | Pushes a log notification to the live MCP session | A process is attached |
+| `model` | `sampling/createMessage` runs the target's model, no human needed | Client supports MCP sampling |
+| `tmux` | Types the wake into the agent's own pane | Agent runs inside tmux |
+| `human` | `elicitation/create` prompts the person | Client supports elicitation |
+| `process` | Relaunches the agent headlessly (`claude -p`, `codex exec`, `gemini -p`) | A `wake_command` is registered |
+
+MCP sampling and elicitation support is still uneven across clients in 2026, so the `tmux` and `process` tiers are
+what make waking work everywhere. `sleep_agent` parks an agent instead of polling; it returns the instant someone
+wakes it, holding the reason and its unread messages.
+
+**It fails loudly.** A coordination bus that looks healthy while delivering nothing is worse than no bus.
+`ask_agent` blocks for a real answer and raises `no_reply` with full diagnostics rather than treating silence as
+agreement. `ping_agent` proves an agent is alive without spending a model call. Unacknowledged handoffs surface as
+dead letters. `vibebus doctor` tells you whether the bus is broken or nobody is home.
+
+**It runs flows.** A flow is a portable multi-agent program written against *roles*, not specific agents, so it
+executes on whichever CLIs happen to be alive — waking or relaunching them as needed. There is no scheduler
+process: `advance_flow` *is* the scheduler, and it runs inside whichever agent calls it next.
+
+```bash
+# Make three different vendors answer the same question and reconcile them.
+vibebus ask lead codex-main "..."          # blocking question, hard error if unanswered
+```
+
+```jsonc
+// A flow: implement, review with a different vendor's model, test, then ask a human.
+{ "id": "root", "type": "sequence", "steps": [
+  { "id": "implement", "type": "task",  "role": "implementer" },
+  { "id": "review",    "type": "task",  "role": "reviewer",
+    "exclude_provider": ["${steps.implement.claim.provider}"] },
+  { "id": "tests",     "type": "exec",  "input": { "command": "npm test" } },
+  { "id": "ship",      "type": "approve", "role": "lead" }
+]}
+```
+
+`ask_quorum` fans one question across agents on **different model providers** and reports the verdict with an
+agreement score — preserving every dissenting answer verbatim rather than averaging disagreement away. It refuses
+to call repeated sampling of one vendor a consensus.
 
 ## Install
 
@@ -141,50 +196,51 @@ For any other CLI, the rule is the same: add a stdio MCP server named `vibebus` 
 
 ## Tools
 
-Vibe Bus exposes these MCP tools:
+**Identity and presence** — `known_clients`, `register_agent`, `heartbeat`, `who`
 
-- `known_clients` - list normalized ids for major CLI/IDE agents.
-- `register_agent` - identify the current agent, role, provider, model, workspace, and capabilities.
-- `heartbeat` - update live status and current task.
-- `send_message` - send a direct threaded message to one or more agents.
-- `send_to_role` - route a message to agents matching role, CLI, or provider.
-- `broadcast` - send a threaded instruction/update to every registered agent.
-- `read_inbox` - read visible messages, optionally marking them read.
-- `wait_for_messages` - bounded polling for new inbox messages.
-- `ack_message` - acknowledge receipt/completion of a required-ack message.
-- `read_thread` - read all visible messages in a conversation thread.
-- `create_task` - create shared work.
-- `handoff_task` - create/assign a task and send a required-ack handoff atomically.
-- `list_tasks` - inspect tasks by status or assignee.
-- `claim_task` - claim open or blocked work.
-- `update_task` - update status, assignee, files, and notes.
-- `record_decision` - store durable team decisions.
-- `team_status` - summarize agents, tasks, messages, decisions, and state path.
+**Messaging** — `send_message`, `send_to_role`, `broadcast`, `read_inbox`, `wait_for_messages`, `ack_message`, `read_thread`, `channel`
 
-Vibe Bus also exposes MCP resources and prompts:
+**Real-time** — `tail_events`, `wait_for_events`
 
-- `resources/list` / `resources/read`: `vibebus://status`, `vibebus://agents`, `vibebus://tasks`, `vibebus://messages`, `vibebus://decisions`, `vibebus://guide`.
-- `prompts/list` / `prompts/get`: `vibebus-start`, `vibebus-handoff`, `vibebus-review`.
+**Question and answer** — `ask_agent` (blocks for a real answer, raises `no_reply` otherwise), `reply_to_ask`, `list_asks`, `ping_agent`
+
+**Waking** — `wake_agent`, `sleep_agent`
+
+**Human in the loop** — `request_approval`, `resolve_approval`
+
+**Work** — `create_task`, `handoff_task`, `list_tasks`, `claim_task`, `update_task`, `lease`, `context`, `record_decision`, `team_status`
+
+**Cross-vendor deliberation** — `ask_quorum`, `debate`
+
+**Flows** — `define_flow`, `start_flow`, `advance_flow`, `report_step`, `flow_status`, `cancel_flow`
+
+Resources: `vibebus://status`, `agents`, `tasks`, `messages`, `events`, `leases`, `context`, `decisions`, `guide` —
+all subscribable, so subscribed clients are pushed updates as the team moves.
+
+Prompts: `vibebus-start`, `vibebus-handoff`, `vibebus-review`, `vibebus-standby`, `vibebus-second-opinion`.
 
 ## Human CLI
 
 ```bash
-vibebus clients
+vibebus status                       # team overview
+vibebus who                          # who is online, idle, asleep, or gone
+vibebus doctor                       # is the bus broken, or is nobody home?
+vibebus watch                        # live event stream in your terminal
+vibebus serve                        # localhost dashboard at :7717
+
 vibebus register codex-main codex implementer openai gpt-5.5
-vibebus register claude-review claude reviewer anthropic sonnet
-vibebus broadcast lead "Split work: Codex implements, Claude reviews, Grok researches edge cases."
-vibebus task lead "Add tests" "Cover inbox filtering, task claiming, and MCP handshake."
-vibebus handoff lead claude-review "Review README" "Check install docs and MCP examples."
-vibebus ack claude-review msg_000002 "Accepted."
-vibebus thread codex-main thread_000001
-vibebus wait codex-main 5000
-vibebus inbox codex-main
-vibebus claim codex-main task_000001
-vibebus done codex-main task_000001 "Tests passing."
-vibebus status
+vibebus ask lead claude-review "Is the migration reversible?"
+vibebus ping lead claude-review
+vibebus wake lead claude-review "tests are red on main"
+vibebus sleep claude-review           # parks until someone wakes it
+
+vibebus lease acquire codex-main src/auth src/api
+vibebus ctx set db '{"engine":"sqlite"}'
+vibebus handoff lead claude-review "Review README" "Check install docs."
+vibebus tail 0
 ```
 
-Default CLI output is formatted for humans. Add `--json` to any command for the raw payload.
+Default output is formatted for humans. Add `--json` to any command for the raw payload.
 
 Legacy aliases still work:
 
@@ -251,7 +307,8 @@ Primary references:
 Default:
 
 ```text
-~/.vibebus/state.json
+~/.vibebus/state.json      # shared state
+~/.vibebus/state.json.seq  # sidecar so watchers can check for changes cheaply
 ```
 
 Override:
@@ -259,6 +316,21 @@ Override:
 ```bash
 VIBEBUS_HOME=/path/to/team-state
 VIBEBUS_STATE=/path/to/state.json
+```
+
+Safety gates, all off by default:
+
+```bash
+VIBEBUS_ALLOW_SPAWN=1   # let the process wake tier relaunch an exited agent
+VIBEBUS_ALLOW_EXEC=1    # let flows run exec steps
+VIBEBUS_TMUX=0          # opt out of tmux keystroke wakes
+VIBEBUS_SAMPLING=0      # never run another client's model
+```
+
+Retention (all collections are capped so the state file cannot grow forever):
+
+```bash
+VIBEBUS_MAX_MESSAGES=800  VIBEBUS_MAX_EVENTS=3000  VIBEBUS_MAX_TASKS=600
 ```
 
 Compatibility aliases are still supported:

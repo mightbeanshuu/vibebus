@@ -21,6 +21,8 @@ const DEFAULT_STATE = {
   asks: [],
   approvals: [],
   wakes: [],
+  flows: {},
+  flow_runs: [],
   channels: {},
   context: {},
   swept_at: null,
@@ -33,6 +35,7 @@ const DEFAULT_LIMITS = {
   tasks: 600,
   asks: 200,
   wakes: 200,
+  flow_runs: 150,
 };
 
 export function createStore(options = {}) {
@@ -135,8 +138,43 @@ export function sweep(state, limits = DEFAULT_LIMITS) {
   expireAsks(state, now);
   expireApprovals(state, now);
   expireWakes(state, now);
+  expireFlowClaims(state, now);
   deadLetter(state, now);
   trim(state, limits);
+}
+
+/**
+ * A flow step whose claimant died must return to the pool, or the run stalls
+ * forever waiting on a process that is never coming back.
+ */
+function expireFlowClaims(state, now) {
+  for (const run of state.flow_runs ?? []) {
+    if (["done", "failed", "cancelled"].includes(run.status)) {
+      continue;
+    }
+    for (const step of Object.values(run.steps ?? {})) {
+      if (step.status !== "claimed" || !step.claim?.lease_expires_at) {
+        continue;
+      }
+      if (Date.parse(step.claim.lease_expires_at) > now) {
+        continue;
+      }
+
+      const attempts = (step.retry_count ?? 0) + 1;
+      const maxAttempts = step.spec?.retry?.max_attempts ?? 3;
+      step.retry_count = attempts;
+      step.status = attempts >= maxAttempts ? "failed" : "pending";
+      step.error = step.status === "failed" ? "claimant died and retries were exhausted" : null;
+      const owner = step.claim.agent_id;
+      step.claim = null;
+
+      emit(state, "flow.step.reclaimed", {
+        actor: "vibebus",
+        ref: run.id,
+        data: { step_id: step.id, was: owner, attempt: attempts, status: step.status },
+      });
+    }
+  }
 }
 
 const ACK_DEADLINE_MS = 10 * 60_000;
@@ -263,6 +301,13 @@ function trim(state, limits) {
     dropped += closed.length - keepClosed.length;
     state.wakes = [...keepClosed, ...open].sort((left, right) => compareIdSuffix(left.id, right.id));
   }
+  if (state.flow_runs.length > limits.flow_runs) {
+    const live = state.flow_runs.filter((run) => !["done", "failed", "cancelled"].includes(run.status));
+    const finished = state.flow_runs.filter((run) => ["done", "failed", "cancelled"].includes(run.status));
+    const keep = finished.slice(-Math.max(0, limits.flow_runs - live.length));
+    dropped += finished.length - keep.length;
+    state.flow_runs = [...keep, ...live].sort((left, right) => compareIdSuffix(left.id, right.id));
+  }
   if (state.tasks.length > limits.tasks) {
     const live = state.tasks.filter((task) => ["open", "claimed", "blocked"].includes(task.status));
     const finished = state.tasks.filter((task) => !["open", "claimed", "blocked"].includes(task.status));
@@ -345,6 +390,8 @@ function normalizeState(state) {
     asks: state.asks ?? [],
     approvals: state.approvals ?? [],
     wakes: state.wakes ?? [],
+    flows: state.flows ?? {},
+    flow_runs: state.flow_runs ?? [],
     channels: state.channels ?? {},
     context: state.context ?? {},
   };
@@ -367,6 +414,7 @@ function resolveLimits(env) {
     tasks: intOr(env.VIBEBUS_MAX_TASKS, DEFAULT_LIMITS.tasks),
     asks: intOr(env.VIBEBUS_MAX_ASKS, DEFAULT_LIMITS.asks),
     wakes: intOr(env.VIBEBUS_MAX_WAKES, DEFAULT_LIMITS.wakes),
+    flow_runs: intOr(env.VIBEBUS_MAX_FLOW_RUNS, DEFAULT_LIMITS.flow_runs),
   };
 }
 

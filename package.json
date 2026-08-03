@@ -10,7 +10,7 @@
     "cli-team": "./bin/vibebus.js"
   },
   "scripts": {
-    "build": "node --check bin/vibebus-mcp.js && node --check bin/vibebus.js && node --check src/mcp-server.js && node --check src/mcp-features.js && node --check src/store.js && node --check src/tools.js && node --check src/shared.js && node --check src/events.js && node --check src/watcher.js && node --check src/presence.js && node --check src/agents.js && node --check src/messaging.js && node --check src/tasks.js && node --check src/asks.js && node --check src/errors.js && node --check src/session.js && node --check src/pump.js && node --check src/dashboard.js && node --check skills/vibebus/scripts/register-session.js",
+    "build": "for f in src/*.js bin/*.js skills/vibebus/scripts/*.js; do node --check \"$f\" || exit 1; done",
     "test": "node --test"
   },
   "keywords": [

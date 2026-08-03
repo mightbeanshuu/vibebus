@@ -13,6 +13,16 @@ import {
   waitForMessages,
 } from "./messaging.js";
 import {
+  advanceFlow,
+  askQuorum,
+  cancelFlow,
+  defineFlow,
+  flowStatus,
+  reportStep,
+  runDebate2,
+  startFlow,
+} from "./flows.js";
+import {
   claimTask,
   context,
   createTask,
@@ -476,6 +486,124 @@ export const TOOL_DEFINITIONS = [
     ),
   },
   {
+    name: "ask_quorum",
+    description:
+      "Ask the same question to several agents spanning DIFFERENT model providers and reconcile their answers. Disagreement is preserved verbatim, never averaged away.",
+    inputSchema: objectSchema(
+      {
+        from: stringProp("Asking agent id."),
+        question: stringProp("The question to put to the panel."),
+        context: stringProp("Extra background for every panelist.", false),
+        n: numberProp("Panel size (default 3)."),
+        role: stringProp("Only consider agents with this role.", false),
+        min_providers: numberProp("Fail unless at least this many distinct providers answer (default 2). Guards against calling repeated sampling of one vendor a consensus."),
+        strategy: enumProp(["majority", "first_answer"], "How to reconcile answers. Default majority."),
+        timeout_ms: numberProp("Per-panelist timeout (default 120000)."),
+        soft_fail: booleanProp("Return a result object instead of raising when the panel cannot be formed."),
+      },
+      ["from", "question"],
+    ),
+  },
+  {
+    name: "debate",
+    description: "Two agents on different providers argue a question for N rounds, then a third judges. Returns the full transcript and the verdict.",
+    inputSchema: objectSchema(
+      {
+        from: stringProp("Agent running the debate."),
+        topic: stringProp("The question being argued."),
+        a_role: stringProp("Role for side A.", false),
+        b_role: stringProp("Role for side B.", false),
+        judge_role: stringProp("Role for the adjudicator. Omit to skip judging.", false),
+        a_provider: stringProp("Preferred provider for side A.", false),
+        b_provider: stringProp("Preferred provider for side B.", false),
+        rounds: numberProp("Rounds per side (default 2, max 5)."),
+        timeout_ms: numberProp("Per-turn timeout."),
+        soft_fail: booleanProp("Return a result object instead of raising."),
+      },
+      ["from", "topic"],
+    ),
+  },
+  {
+    name: "define_flow",
+    description:
+      "Register a reusable multi-agent flow: a tree of steps written against ROLES rather than specific agents, so it runs on whatever agents are alive. Validated and cycle-checked up front.",
+    inputSchema: objectSchema(
+      {
+        from: stringProp("Author agent id."),
+        name: stringProp("Human-readable flow name."),
+        root: objectProp("Root step. A sequence or parallel container holding task/ask/quorum/debate/approve/exec/wait_for/decide steps."),
+        flow_id: stringProp("Reuse an id to publish a new version.", false),
+        input_schema: arrayProp("Names of the inputs this flow expects.", false),
+        max_steps: numberProp("Hard cap on step count (default 500)."),
+      },
+      ["from", "name", "root"],
+    ),
+  },
+  {
+    name: "start_flow",
+    description: "Start a run of a defined flow, or of an inline root step. Returns the run id to advance.",
+    inputSchema: objectSchema(
+      {
+        from: stringProp("Agent starting the run."),
+        flow_id: stringProp("Defined flow to run.", false),
+        root: objectProp("Inline root step, for a one-off flow with no define_flow round trip."),
+        inputs: objectProp("Values referenced by ${inputs.x} in the flow."),
+        max_wake_tier: enumProp(["bus", "session", "model", "tmux", "human", "process"], "How hard the flow may escalate to reach a missing role."),
+      },
+      ["from"],
+    ),
+  },
+  {
+    name: "advance_flow",
+    description:
+      "Make progress on a flow run as this agent. Claims the next runnable step: engine-driven steps (ask, quorum, debate, approve, exec, wait_for, decide) are executed immediately; a task step is returned to you as an assignment to do and report.",
+    inputSchema: objectSchema(
+      {
+        run_id: stringProp("Flow run id."),
+        agent_id: stringProp("Agent offering to work."),
+        roles_offered: arrayProp("Extra roles this agent will take for this run, beyond its registered role.", false),
+      },
+      ["run_id", "agent_id"],
+    ),
+  },
+  {
+    name: "report_step",
+    description: "Report the result of a task step you claimed via advance_flow. Cascades the run forward.",
+    inputSchema: objectSchema(
+      {
+        run_id: stringProp("Flow run id."),
+        step_id: stringProp("Step you claimed."),
+        agent_id: stringProp("Reporting agent id. Must be the claimant."),
+        status: enumProp(["done", "failed"], "Outcome."),
+        output: objectProp("Result data. Later steps read it via ${steps.<id>.output.<field>}."),
+        error: stringProp("What went wrong, when failing.", false),
+      },
+      ["run_id", "step_id", "agent_id", "status"],
+    ),
+  },
+  {
+    name: "flow_status",
+    description: "Inspect one flow run's steps and health, or list defined flows and recent runs when called with no run_id.",
+    inputSchema: objectSchema({
+      run_id: stringProp("Run to inspect. Omit to list flows and runs.", false),
+      verbose: booleanProp("Include step outputs and specs."),
+      status_filter: enumProp(["running", "done", "failed", "cancelled"], "Filter listed runs."),
+      limit: numberProp("Maximum runs to list."),
+    }),
+  },
+  {
+    name: "cancel_flow",
+    description: "Cancel a flow run and release its outstanding step claims.",
+    inputSchema: objectSchema(
+      {
+        run_id: stringProp("Run to cancel."),
+        agent_id: stringProp("Agent cancelling it."),
+        reason: stringProp("Why.", false),
+      },
+      ["run_id", "agent_id"],
+    ),
+  },
+  {
     name: "team_status",
     description: "Full picture: agent presence, open tasks, recent messages, events, leases, pending questions, and decisions.",
     inputSchema: objectSchema({
@@ -521,6 +649,14 @@ const HANDLERS = {
   context,
   record_decision: recordDecision,
   team_status: teamStatus,
+  ask_quorum: askQuorum,
+  debate: runDebate2,
+  define_flow: defineFlow,
+  start_flow: startFlow,
+  advance_flow: advanceFlow,
+  report_step: reportStep,
+  flow_status: flowStatus,
+  cancel_flow: cancelFlow,
 };
 
 export async function callTool(store, name, input = {}, ctx = {}) {

@@ -1,6 +1,6 @@
 ---
 name: vibebus
-description: Coordinate multiple MCP-capable CLI/IDE coding agents through Vibe Bus. Use when Codex needs to delegate, review, synchronize, monitor, or hand off work across Claude Code, Codex CLI, Gemini CLI, Antigravity, Grok, Cursor, Continue, VS Code, LM Studio, Aider, Goose, OpenCode, or any custom agent connected to the shared Vibe Bus MCP server.
+description: Coordinate multiple MCP-capable CLI/IDE coding agents through Vibe Bus in real time. Use when an agent needs to delegate, review, synchronize, monitor, hand off, wake a sleeping teammate, ask another agent a question and wait for the answer, get a second opinion from a different model vendor, or run a shared multi-agent flow across Claude Code, Codex CLI, Gemini CLI, Antigravity, Grok, Cursor, Continue, VS Code, LM Studio, Aider, Goose, OpenCode, or any custom agent on the shared Vibe Bus MCP server.
 ---
 
 # Vibe Bus
@@ -32,6 +32,41 @@ For multi-agent work:
 
 Do not use Vibe Bus as a substitute for source control or tests. Treat it as a coordination layer.
 
+## Waiting And Waking
+
+Never poll in a loop. The bus is push-based.
+
+- `wait_for_messages` / `wait_for_events` block on a file watcher and return within milliseconds of real activity. Long timeouts are safe and cost nothing while idle.
+- `sleep_agent` parks you when you have nothing to do. It returns the moment a teammate wakes you, carrying the reason and your unread messages.
+- `wake_agent` rouses a teammate. It escalates bus -> session -> its model -> its tmux pane -> its human -> relaunching it, stopping at the first tier that reaches them. Sending high or urgent work to an idle agent wakes it automatically.
+- `ping_agent` proves someone is alive without spending a model call. Use it before assuming a silent agent is thinking.
+
+## Getting A Real Answer
+
+Silence is not agreement.
+
+- `ask_agent` blocks until the other agent answers and raises `no_reply` — with presence diagnostics and what to do next — if nobody does. Prefer it over `send_message` whenever you cannot proceed without the answer.
+- `ask_quorum` puts one question to agents on different model providers and returns the verdict, an agreement score, and every dissenting answer verbatim. Use it for decisions you would regret getting wrong, and read the dissent rather than only the verdict.
+- `debate` has two agents from different vendors argue and a third judge. Use it when the tradeoff is genuinely contested.
+- `request_approval` asks the human behind another agent's CLI.
+
+If a call returns an error with a `code` and `hint`, act on the hint. `agent_unreachable` means nobody is home, not that the bus is broken — `vibebus doctor` distinguishes the two.
+
+## Not Colliding
+
+- `lease` the files you are about to edit, before you edit them. A conflict names the holder so you can message them.
+- Read `context` before assuming a shared fact; write it with `if_version` so you cannot clobber a concurrent write.
+- Use `depends_on` on tasks instead of waiting manually. Finishing a task unblocks and wakes whatever was waiting.
+
+## Flows
+
+For repeatable multi-agent work, define a flow once and let it run on whoever is alive.
+
+- Steps target **roles**, not agent ids, so the flow does not care which CLIs are running.
+- `exclude_provider: ["${steps.implement.claim.provider}"]` guarantees the reviewer is on a different model vendor than the implementer.
+- Loop `advance_flow`: engine steps (ask, quorum, debate, approve, exec, wait_for, decide) execute immediately; a `task` step comes back as an assignment for you to do and `report_step`.
+- There is no scheduler process. Whichever agent calls `advance_flow` next moves the flow forward.
+
 ## Message Rules
 
 - Keep messages actionable: include the requested action, expected output, and relevant files.
@@ -40,7 +75,7 @@ Do not use Vibe Bus as a substitute for source control or tests. Treat it as a c
 - Prefer direct messages for ownership and `broadcast` for team-wide decisions.
 - Use `requires_ack: true` for handoffs that must not be dropped.
 - Use `reply_to` when continuing a message thread.
-- Use `wait_for_messages` only with short timeouts; do not block indefinitely.
+- Use `ask_agent` instead of `send_message` when you need an answer before continuing.
 
 ## Task Rules
 
