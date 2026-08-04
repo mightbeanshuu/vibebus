@@ -3,21 +3,20 @@
 </p>
 
 <p align="center">
-  <b>The local MCP party line for CLI agents.</b><br>
-  Make Claude, Codex, Gemini, Antigravity, Grok, Cursor, Continue, VS Code, LM Studio, Aider, Goose, and custom agents coordinate without pretending telepathy is a project plan.
+  <b>Your coding agents are running in four terminals and none of them know the others exist.</b><br>
+  Vibe Bus is a local MCP server that lets Claude Code, Codex, Gemini CLI, Cursor, Aider, and friends
+  message each other, wake each other, ask each other questions and <i>wait for the answer</i>,
+  hold locks on files, and run shared multi-agent flows — with no server, no daemon, and no dependencies.
 </p>
 
 <p align="center">
-  <b>v2 is real-time and bidirectional.</b> Agents wake each other, ask each other questions and wait for the answer,
-  argue across model vendors, and run shared multi-agent flows — and when nobody answers, you get a typed error instead of silence.
-</p>
-
-<p align="center">
-  <a href="https://mightbeanshuu.github.io/vibebus/">Landing page</a>
-  ·
-  <a href="https://github.com/mightbeanshuu/vibebus">GitHub</a>
+  <a href="#see-it">See it in 20 seconds</a>
   ·
   <a href="#install">Install</a>
+  ·
+  <a href="ARCHITECTURE.md">Architecture</a>
+  ·
+  <a href="https://mightbeanshuu.github.io/vibebus/">Landing page</a>
 </p>
 
 <p align="center">
@@ -25,6 +24,77 @@
   <img alt="MCP stdio" src="assets/badge-mcp.svg">
   <img alt="License MIT" src="assets/badge-license.svg">
 </p>
+
+## See it
+
+```bash
+git clone https://github.com/mightbeanshuu/vibebus.git && cd vibebus && npm run demo
+```
+
+No API keys, no config, nothing installed. It spins up a throwaway bus and walks through a wake, a
+blocking question, a cross-vendor quorum, a lease deadlock, the shared cache, and a full flow run —
+against the real store, the real lock, and the real event journal. Only the agents are simulated.
+
+```text
+2. An idle agent is woken
+   woken by claude-impl in 6ms — auth patch needs review
+   it resumed holding 1 unread message(s), so it knows why it woke
+
+4. Three vendors are asked the same question
+   verdict: Use row-level locking.
+   agreement: 67% across providers openai, google, xai
+   dissent grok-qa (xai): Use optimistic concurrency instead.
+
+5. Two agents cannot edit the same file
+   lease_conflict — A write lease on src/auth/session.js is blocked by claude-impl.
+   deadlock — Deadlock: codex-review -> gemini-scout -> codex-review are each waiting on files the next one holds.
+
+7. A flow runs on whoever is alive
+   claude-impl refused the review — same vendor as the implementer
+   codex-review (openai) claimed review — a different vendor than the implementer
+```
+
+## The problem
+
+Running several coding agents at once creates three failures that no amount of prompting fixes:
+
+- **They edit the same files.** Agent A refactors a function, agent B edits it underneath, and you
+  resolve the merge by hand.
+- **They redo each other's work.** Every handoff starts cold, re-reads the same files, and re-derives
+  the same conclusions.
+- **You become the message bus.** You copy-paste between terminals, and an idle agent sits next to
+  urgent work until you personally go and prompt it.
+
+## What is actually different here
+
+Being honest about which parts are novel and which are well-known patterns applied to a new substrate:
+
+**Waking a sleeping agent is treated as a protocol problem.** `wake_agent` escalates through six tiers —
+bus, session push, its model via MCP sampling, typing into its real terminal, its human via elicitation,
+and finally relaunching it headlessly — stopping at the first one that reaches it. MCP sampling support
+is still thin across clients in 2026, so the terminal and process tiers are what make this work
+everywhere, not the exotic ones.
+
+**Silence is never mistaken for agreement.** `ask_agent` blocks for a real answer and raises `no_reply`
+with presence diagnostics and a next action. `ping_agent` proves an agent is alive without spending a
+model call. `vibebus doctor` tells you whether the bus is broken or nobody is home. A coordination tool
+that looks healthy while delivering nothing is worse than no tool.
+
+**Cross-vendor deliberation, locally.** `ask_quorum` puts one question to agents on different model
+providers and reports the verdict with an agreement score, preserving every dissenting answer verbatim.
+It refuses to call repeated sampling of one vendor a consensus. No credentials are shared or
+aggregated — each CLI spends its own model call through its own session.
+
+**Flows run on whoever is alive.** Steps target roles, not agents, so a flow executes on whichever CLIs
+happen to be running. There is no scheduler process: `advance_flow` *is* the scheduler, and it runs
+inside whichever agent calls it next. `exclude_provider: ["${steps.build.claim.provider}"]` guarantees
+the reviewer is a different vendor than whoever actually implemented.
+
+**Well-known patterns, reapplied:** the event journal is textbook event sourcing; claim-plus-lease-plus-
+heartbeat is how every durable task queue survives worker death; read/write locks and deadlock detection
+are database fundamentals. None of that is new. What is uncommon is the combination under these
+constraints — zero dependencies, no daemon, no shared credentials, survives any participant being killed
+at any moment, and the participants are whole interactive CLI products rather than library-level agents.
 
 ## What It Is
 

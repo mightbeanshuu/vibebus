@@ -7,11 +7,13 @@
     "vibebus-mcp": "./bin/vibebus-mcp.js",
     "vibebus": "./bin/vibebus.js",
     "cli-team-mcp": "./bin/vibebus-mcp.js",
-    "cli-team": "./bin/vibebus.js"
+    "cli-team": "./bin/vibebus.js",
+    "vibebus-demo": "./scripts/demo.js"
   },
   "scripts": {
     "build": "for f in src/*.js bin/*.js skills/vibebus/scripts/*.js; do node --check \"$f\" || exit 1; done",
-    "test": "node --test"
+    "test": "node --test",
+    "demo": "node scripts/demo.js"
   },
   "keywords": [
     "mcp",
@@ -43,12 +45,13 @@
     "node": ">=18"
   },
   "files": [
-    "bin",
-    "src",
-    "skills",
-    "assets",
-    "docs",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "assets",
+    "bin",
+    "docs",
+    "scripts",
+    "skills",
+    "src"
   ]
 }

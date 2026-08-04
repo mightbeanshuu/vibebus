@@ -127,6 +127,48 @@ test("a flow runs across agents, executes engine steps, and branches", async () 
   assert.equal(status.steps.find((step) => step.id === "rework").status, "skipped");
 });
 
+test("a completed step keeps its claim so later steps can route around that vendor", async () => {
+  const store = createMemoryStore();
+  await callTool(store, "register_agent", { agent_id: "anthropic-impl", cli: "claude", role: "implementer" });
+  await callTool(store, "register_agent", { agent_id: "openai-review", cli: "codex", role: "reviewer" });
+  await callTool(store, "register_agent", { agent_id: "anthropic-review", cli: "claude", role: "reviewer" });
+
+  const run = await callTool(store, "start_flow", {
+    from: "anthropic-impl",
+    root: {
+      id: "root",
+      type: "sequence",
+      steps: [
+        { id: "build", type: "task", role: "implementer", input: {} },
+        {
+          id: "review",
+          type: "task",
+          role: "reviewer",
+          exclude_provider: ["${steps.build.claim.provider}"],
+          input: {},
+        },
+      ],
+    },
+  });
+
+  await callTool(store, "advance_flow", { run_id: run.run.id, agent_id: "anthropic-impl" });
+  await callTool(store, "report_step", {
+    run_id: run.run.id,
+    step_id: "build",
+    agent_id: "anthropic-impl",
+    status: "done",
+    output: { verdict: "ok" },
+  });
+
+  // The reviewer on the same provider as the implementer must be turned away...
+  const sameVendor = await callTool(store, "advance_flow", { run_id: run.run.id, agent_id: "anthropic-review" });
+  assert.equal(sameVendor.claimed_nothing, true, "a same-vendor reviewer must not be able to claim the review");
+
+  // ...while a different vendor gets it.
+  const otherVendor = await callTool(store, "advance_flow", { run_id: run.run.id, agent_id: "openai-review" });
+  assert.equal(otherVendor.assignment.step_id, "review");
+});
+
 test("exec steps stay off unless explicitly enabled", async () => {
   const store = createMemoryStore();
   await callTool(store, "register_agent", { agent_id: "a", cli: "codex", role: "impl" });

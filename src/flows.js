@@ -244,7 +244,10 @@ export function reportStep(store, input) {
     } else {
       step.status = "done";
       step.output = input.output ?? {};
-      step.claim = null;
+      // The claim is kept, not cleared: later steps reference
+      // ${steps.<id>.claim.provider} to route work away from the vendor that
+      // did the previous step, and that has to survive completion.
+      step.claim = { ...step.claim, completed_at: timestamp() };
       emit(state, "flow.step.done", {
         actor: input.agent_id,
         ref: run.id,
